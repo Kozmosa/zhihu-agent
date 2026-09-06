@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
+from zhijing import __version__
 from zhijing.api import router
 from zhijing.container import build_container
 from zhijing.core.config import Settings
@@ -22,9 +23,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="知境 ZhiJing Agent",
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
-        description="本地阅读助手 Server。默认离线摘录；通过 /api/v1/companion/run 组合功能。",
+        description="本地知识助手 Server。五项能力支持 Ollama 结构化生成，默认离线摘录；通过 companion/run 组合功能。",
     )
 
     @app.exception_handler(DomainError)
@@ -39,7 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health", tags=["运行状态"])
     def health():
-        return {"status": "ok", "version": "0.1.0", "model_provider": settings.model_provider}
+        return {"status": "ok", "version": __version__, "model_provider": settings.model_provider}
 
     app.include_router(router)
     return app

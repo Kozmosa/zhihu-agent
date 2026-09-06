@@ -38,20 +38,42 @@ class Container:
 
 
 def build_container(settings: Settings) -> Container:
-    if settings.model_provider not in {"extractive", "ollama"}:
-        raise ValueError("ZHIJING_MODEL_PROVIDER must be extractive or ollama")
+    if errors := settings.validation_errors():
+        raise ValueError(" ".join(errors))
     repository = SQLiteSourceRepository(settings.data_dir / "sources.sqlite3")
     repository.initialize()
     client = None
     generator = ExtractiveGenerator()
+    structured = None
     if settings.model_provider == "ollama":
-        client = httpx.Client(base_url=settings.ollama_url, timeout=60, trust_env=False)
-        generator = OllamaGenerator(client, settings.ollama_model)
+        headers = (
+            {"Authorization": f"Bearer {settings.ollama_api_key}"}
+            if settings.ollama_api_key
+            else {}
+        )
+        client = httpx.Client(
+            base_url=settings.ollama_url,
+            timeout=settings.ollama_timeout,
+            headers=headers,
+            trust_env=False,
+        )
+        structured = OllamaGenerator(
+            client,
+            settings.ollama_model,
+            output_format=settings.ollama_format,
+            max_input_chars=settings.ollama_max_input_chars,
+            num_predict=settings.ollama_num_predict,
+            num_ctx=settings.ollama_num_ctx,
+        )
+        generator = structured
     sources = SourceService(repository)
     retriever = LexicalRetriever(repository)
     author = AuthorService(repository, retriever, generator)
-    reader, cards = ReaderService(repository), CardService(repository)
-    facts = FactService(repository, retriever)
+    reader, cards = (
+        ReaderService(repository, generator=structured),
+        CardService(repository, generator=structured),
+    )
+    facts = FactService(repository, retriever, generator=structured)
     return Container(
         sources=sources,
         retriever=retriever,
@@ -59,7 +81,7 @@ def build_container(settings: Settings) -> Container:
         reader=reader,
         cards=cards,
         facts=facts,
-        knowledge=KnowledgeService(repository),
+        knowledge=KnowledgeService(repository, generator=structured),
         companion=CompanionService(sources, reader, cards, facts, author),
         export_dir=settings.data_dir / "exports-tmp",
         model_client=client,

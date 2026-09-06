@@ -14,7 +14,12 @@ def test_results(xml_path, catalog_path):
         base = name.split("[")[0]
         details = catalog.get(
             base,
-            {"module": "入口", "title": base, "input": "详见测试源码", "expected": "测试断言通过"},
+            {
+                "module": module_label(case.attrib.get("classname", "")),
+                "title": base,
+                "input": "详见测试源码",
+                "expected": "测试断言通过",
+            },
         )
         if "[" in name:
             details = {
@@ -41,6 +46,24 @@ def test_results(xml_path, catalog_path):
             }
         )
     return rows
+
+
+def module_label(classname):
+    for key, label in [
+        ("reader_ollama", "长文模型"),
+        ("cards_ollama", "制卡模型"),
+        ("facts_ollama", "审查模型"),
+        ("knowledge_ollama", "知识模型"),
+        ("ollama_integration", "五功能模型集成"),
+        ("ollama_transport", "模型HTTP边界"),
+        ("model_settings", "模型配置"),
+        ("text_fidelity", "原文保留"),
+        ("cards_evidence_export", "卡片证据导出"),
+        ("ollama", "模型适配"),
+    ]:
+        if key in classname:
+            return label
+    return "工程验证"
 
 
 def source_manifest(project):

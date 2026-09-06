@@ -21,7 +21,10 @@ def _html(text: str) -> str:
 
 
 def _fields(card) -> list[str]:
-    return [_html(card.front), _html(card.back), _html(card.source_id)]
+    source = card.source_id
+    if card.evidence_excerpt is not None:
+        source += f"\n原文摘录：{card.evidence_excerpt}"
+    return [_html(card.front), _html(card.back), _html(source)]
 
 
 def export_tsv(request: ExportRequest) -> str:

@@ -1,6 +1,8 @@
 """业务只依赖这些协议；SQLite、模型供应商均可独立替换。"""
 
-from typing import Protocol
+from typing import Protocol, TypeVar
+
+from pydantic import BaseModel
 
 from zhijing.domain.models import Citation, Generation, Source, SourceDraft
 
@@ -19,3 +21,19 @@ class Retriever(Protocol):
 
 class AnswerGenerator(Protocol):
     def answer(self, question: str, context: list[Citation]) -> Generation: ...
+
+
+ModelResult = TypeVar("ModelResult", bound=BaseModel)
+
+
+class StructuredGenerator(Protocol):
+    """Provider-neutral structured generation; source validation stays in each feature."""
+
+    def generate(
+        self,
+        *,
+        task: str,
+        instructions: str,
+        payload: dict,
+        response_model: type[ModelResult],
+    ) -> ModelResult: ...

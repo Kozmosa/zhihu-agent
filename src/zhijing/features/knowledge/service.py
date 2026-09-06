@@ -1,6 +1,7 @@
 import hashlib
 
-from zhijing.domain.ports import SourceRepository
+from zhijing.domain.ports import SourceRepository, StructuredGenerator
+from zhijing.features.knowledge.generation import build_model_graph
 from zhijing.features.knowledge.schemas import (
     GraphEdge,
     GraphNode,
@@ -11,13 +12,21 @@ from zhijing.features.knowledge.schemas import (
 
 
 class KnowledgeService:
-    def __init__(self, repository: SourceRepository):
+    def __init__(
+        self,
+        repository: SourceRepository,
+        generator: StructuredGenerator | None = None,
+    ):
         self.repository = repository
+        self.generator = generator
 
     def build(self, author_id: str | None = None, limit: int = 100) -> KnowledgeGraph:
         sources = self.repository.list(author_id)
+        selected = sources[:limit]
+        if self.generator and selected:
+            return build_model_graph(self.generator, selected, len(sources))
         nodes, edges, topics = [], [], {}
-        for index, source in enumerate(sources[:limit]):
+        for index, source in enumerate(selected):
             answer_id = f"answer:{source.id}"
             nodes.append(
                 GraphNode(

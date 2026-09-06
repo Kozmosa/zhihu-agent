@@ -1,6 +1,8 @@
 {
   "name": "ZhiJing Agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "ollama_guide": "Ollama接入说明.md",
+  "ollama_smoke_command": "python scripts/ollama_smoke.py --live",
   "guide": "ZhiJing-Agent-工程指南.md",
   "readme": "README.md",
   "test_report_html": "运行测试报告.html",

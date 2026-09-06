@@ -12,8 +12,12 @@ def test_ollama_sends_only_supplied_evidence():
     def handler(request):
         body = json.loads(request.content)
         assert body["stream"] is False
-        assert json.loads(body["prompt"])["evidence"][0]["text"] == "资料原文"
-        return httpx.Response(200, json={"response": "根据资料[1]回答。"})
+        prompt = json.loads(body["prompt"])
+        assert prompt["task"] == "author"
+        assert prompt["input"]["evidence"][0]["text"] == "资料原文"
+        assert body["format"] == prompt["schema"]
+        answer = json.dumps({"answer": "根据资料[1]回答。", "citations": [1]})
+        return httpx.Response(200, json={"response": answer, "done": True})
 
     with httpx.Client(transport=httpx.MockTransport(handler), base_url="http://ollama") as client:
         result = OllamaGenerator(client, "test-model").answer(

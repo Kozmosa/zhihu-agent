@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -14,10 +14,12 @@ class Card(Schema):
     front: Annotated[NonBlank, Field(max_length=2000)]
     back: Annotated[NonBlank, Field(max_length=5000)]
     source_id: ShortText
+    evidence_excerpt: Annotated[NonBlank, Field(max_length=5000)] | None = None
 
 
 class CardSet(Schema):
     cards: list[Card]
+    mode: Literal["extractive", "ollama"] = "extractive"
     notice: str = "自动摘录草稿，请检查问题质量与原文含义后再导入复习。"
 
 
