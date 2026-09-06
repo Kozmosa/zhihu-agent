@@ -49,3 +49,16 @@ $env:ZHIJING_DATA_DIR = Join-Path (Get-Location) 'data'
 ```
 
 其他系统可使用 `.venv/bin/python main.py`，并显式设置 `ZHIJING_DATA_DIR` 到可写目录。现有配置默认指向 CzCode 工作区；跨平台运行尚未实测。不要将个人 `.env`、数据库和虚拟环境提交到仓库，它们已加入忽略规则。
+
+## GitHub 同步
+
+目标仓库为 `https://github.com/Kozmosa/zhihu-agent`。先提交本地修改，并在执行终端完成 GitHub 认证，再运行项目内脚本：
+
+```powershell
+# 获取远端信息并输出同步计划，不合并或推送
+& '.\scripts\sync_github.ps1'
+# 合并远端默认分支、正常推送，再检查远端提交 SHA
+& '.\scripts\sync_github.ps1' -Publish
+```
+
+脚本校验 origin 地址和干净工作区，自动读取远端默认分支；仅对空仓库采用 main。有冲突时保留现场并停止推送，不执行强制推送、清理或重置。它只对当前项目使用单次 Git 目录信任参数，不修改全局配置。若认证失败，需要在当前终端可用的 GitHub 登录环境中再执行。
