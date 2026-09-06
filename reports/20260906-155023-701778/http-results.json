@@ -1,0 +1,712 @@
+[
+  {
+    "title": "正式入口从项目外启动",
+    "input": "main.py --port，工作目录为独立 QA 目录",
+    "expected": "15 秒内健康接口可用",
+    "actual": {
+      "port": 65309,
+      "working_directory": "E:\\CzCode\\codex\\qa\\zhijing-report-20260906-155023-701778",
+      "pid": 29920
+    },
+    "status": "通过",
+    "seconds": 1.159
+  },
+  {
+    "title": "服务健康检查",
+    "input": "GET /health",
+    "expected": "HTTP 200 且 status=ok",
+    "actual": {
+      "http_status": 200,
+      "body": {
+        "status": "ok",
+        "version": "0.1.0",
+        "model_provider": "extractive"
+      }
+    },
+    "status": "通过",
+    "seconds": 0.0012,
+    "request": null
+  },
+  {
+    "title": "交互文档入口",
+    "input": "GET /docs",
+    "expected": "HTTP 200 且包含 swagger-ui",
+    "actual": {
+      "http_status": 200,
+      "body": "\n    <!DOCTYPE html>\n    <html>\n    <head>\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <link type=\"text/css\" rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css\">\n    <link rel=\"shortcut icon\" href=\"https://fastapi.tiangolo.com/img/"
+    },
+    "status": "通过",
+    "seconds": 0.0007,
+    "request": null
+  },
+  {
+    "title": "API 契约",
+    "input": "GET /openapi.json",
+    "expected": "HTTP 200 且包含统一工作流接口",
+    "actual": {
+      "http_status": 200,
+      "body": {
+        "openapi": "3.1.0",
+        "paths": [
+          "/health",
+          "/api/v1/sources/import",
+          "/api/v1/sources",
+          "/api/v1/sources/{source_id}",
+          "/api/v1/retrieval/search",
+          "/api/v1/knowledge-map",
+          "/api/v1/author/ask",
+          "/api/v1/reading/analyze",
+          "/api/v1/cards/generate",
+          "/api/v1/cards/export/tsv",
+          "/api/v1/cards/export/apkg",
+          "/api/v1/facts/review",
+          "/api/v1/companion/run"
+        ]
+      }
+    },
+    "status": "通过",
+    "seconds": 0.0502,
+    "request": null
+  },
+  {
+    "title": "导入示例回答",
+    "input": "POST /api/v1/sources/import",
+    "expected": "HTTP 200，返回 3 条资料",
+    "actual": {
+      "http_status": 200,
+      "body": [
+        {
+          "title": "如何通过主动回忆改善学习？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+          "url": null,
+          "topics": [
+            "学习方法",
+            "记忆"
+          ],
+          "origin": "demo",
+          "id": "25e74d4fd4f948be358654ec",
+          "created_at": "2026-09-06T07:50:29.593936+00:00"
+        },
+        {
+          "title": "怎样阅读一篇复杂长文？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+          "url": null,
+          "topics": [
+            "阅读方法",
+            "学习方法"
+          ],
+          "origin": "demo",
+          "id": "6237208fc181a01fa39e2e0d",
+          "created_at": "2026-09-06T07:50:29.610133+00:00"
+        },
+        {
+          "title": "如何理解知识地图？",
+          "author_id": "demo-author-2",
+          "author_name": "示例答主·图谱",
+          "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+          "url": null,
+          "topics": [
+            "知识管理"
+          ],
+          "origin": "demo",
+          "id": "be575ea4d72d33832a1ad77a",
+          "created_at": "2026-09-06T07:50:29.618880+00:00"
+        }
+      ]
+    },
+    "status": "通过",
+    "seconds": 0.0411,
+    "request": {
+      "items": [
+        {
+          "title": "如何通过主动回忆改善学习？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+          "topics": [
+            "学习方法",
+            "记忆"
+          ],
+          "origin": "demo"
+        },
+        {
+          "title": "怎样阅读一篇复杂长文？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+          "topics": [
+            "阅读方法",
+            "学习方法"
+          ],
+          "origin": "demo"
+        },
+        {
+          "title": "如何理解知识地图？",
+          "author_id": "demo-author-2",
+          "author_name": "示例答主·图谱",
+          "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+          "topics": [
+            "知识管理"
+          ],
+          "origin": "demo"
+        }
+      ]
+    }
+  },
+  {
+    "title": "重复导入去重",
+    "input": "POST /api/v1/sources/import",
+    "expected": "返回 ID 和首次导入相同",
+    "actual": {
+      "http_status": 200,
+      "body": [
+        {
+          "title": "如何通过主动回忆改善学习？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+          "url": null,
+          "topics": [
+            "学习方法",
+            "记忆"
+          ],
+          "origin": "demo",
+          "id": "25e74d4fd4f948be358654ec",
+          "created_at": "2026-09-06T07:50:29.593936+00:00"
+        },
+        {
+          "title": "怎样阅读一篇复杂长文？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+          "url": null,
+          "topics": [
+            "阅读方法",
+            "学习方法"
+          ],
+          "origin": "demo",
+          "id": "6237208fc181a01fa39e2e0d",
+          "created_at": "2026-09-06T07:50:29.610133+00:00"
+        },
+        {
+          "title": "如何理解知识地图？",
+          "author_id": "demo-author-2",
+          "author_name": "示例答主·图谱",
+          "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+          "url": null,
+          "topics": [
+            "知识管理"
+          ],
+          "origin": "demo",
+          "id": "be575ea4d72d33832a1ad77a",
+          "created_at": "2026-09-06T07:50:29.618880+00:00"
+        }
+      ]
+    },
+    "status": "通过",
+    "seconds": 0.0091,
+    "request": {
+      "items": [
+        {
+          "title": "如何通过主动回忆改善学习？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+          "topics": [
+            "学习方法",
+            "记忆"
+          ],
+          "origin": "demo"
+        },
+        {
+          "title": "怎样阅读一篇复杂长文？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+          "topics": [
+            "阅读方法",
+            "学习方法"
+          ],
+          "origin": "demo"
+        },
+        {
+          "title": "如何理解知识地图？",
+          "author_id": "demo-author-2",
+          "author_name": "示例答主·图谱",
+          "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+          "topics": [
+            "知识管理"
+          ],
+          "origin": "demo"
+        }
+      ]
+    }
+  },
+  {
+    "title": "资料数量",
+    "input": "GET /api/v1/sources",
+    "expected": "重复导入后仍为 3 条",
+    "actual": {
+      "http_status": 200,
+      "body": [
+        {
+          "title": "如何通过主动回忆改善学习？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+          "url": null,
+          "topics": [
+            "学习方法",
+            "记忆"
+          ],
+          "origin": "demo",
+          "id": "25e74d4fd4f948be358654ec",
+          "created_at": "2026-09-06T07:50:29.593936+00:00"
+        },
+        {
+          "title": "怎样阅读一篇复杂长文？",
+          "author_id": "demo-author-1",
+          "author_name": "示例答主·知行",
+          "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+          "url": null,
+          "topics": [
+            "阅读方法",
+            "学习方法"
+          ],
+          "origin": "demo",
+          "id": "6237208fc181a01fa39e2e0d",
+          "created_at": "2026-09-06T07:50:29.610133+00:00"
+        },
+        {
+          "title": "如何理解知识地图？",
+          "author_id": "demo-author-2",
+          "author_name": "示例答主·图谱",
+          "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+          "url": null,
+          "topics": [
+            "知识管理"
+          ],
+          "origin": "demo",
+          "id": "be575ea4d72d33832a1ad77a",
+          "created_at": "2026-09-06T07:50:29.618880+00:00"
+        }
+      ]
+    },
+    "status": "通过",
+    "seconds": 0.0039,
+    "request": null
+  },
+  {
+    "title": "知识地图",
+    "input": "GET /api/v1/knowledge-map",
+    "expected": "7 个节点、5 条边",
+    "actual": {
+      "http_status": 200,
+      "body": {
+        "nodes": [
+          {
+            "id": "answer:25e74d4fd4f948be358654ec",
+            "position": {
+              "x": 360.0,
+              "y": 0.0
+            },
+            "data": {
+              "label": "如何通过主动回忆改善学习？",
+              "kind": "answer",
+              "source_id": "25e74d4fd4f948be358654ec"
+            }
+          },
+          {
+            "id": "topic:d6543d3bdf2eedd9",
+            "position": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "data": {
+              "label": "学习方法",
+              "kind": "topic",
+              "source_id": null
+            }
+          },
+          {
+            "id": "topic:7a6335b379b9a161",
+            "position": {
+              "x": 0.0,
+              "y": 150.0
+            },
+            "data": {
+              "label": "记忆",
+              "kind": "topic",
+              "source_id": null
+            }
+          },
+          {
+            "id": "answer:6237208fc181a01fa39e2e0d",
+            "position": {
+              "x": 360.0,
+              "y": 100.0
+            },
+            "data": {
+              "label": "怎样阅读一篇复杂长文？",
+              "kind": "answer",
+              "source_id": "6237208fc181a01fa39e2e0d"
+            }
+          },
+          {
+            "id": "topic:437c97a7c2abfc71",
+            "position": {
+              "x": 0.0,
+              "y": 300.0
+            },
+            "data": {
+              "label": "阅读方法",
+              "kind": "topic",
+              "source_id": null
+            }
+          },
+          {
+            "id": "answer:be575ea4d72d33832a1ad77a",
+            "position": {
+              "x": 360.0,
+              "y": 200.0
+            },
+            "data": {
+              "label": "如何理解知识地图？",
+              "kind": "answer",
+              "source_id": "be575ea4d72d33832a1ad77a"
+            }
+          },
+          {
+            "id": "topic:d1af5b6220f76b6c",
+            "position": {
+              "x": 0.0,
+              "y": 450.0
+            },
+            "data": {
+              "label": "知识管理",
+              "kind": "topic",
+              "source_id": null
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "topic:d6543d3bdf2eedd9->answer:25e74d4fd4f948be358654ec",
+            "source": "topic:d6543d3bdf2eedd9",
+            "target": "answer:25e74d4fd4f948be358654ec",
+            "label": "归类"
+          },
+          {
+            "id": "topic:7a6335b379b9a161->answer:25e74d4fd4f948be358654ec",
+            "source": "topic:7a6335b379b9a161",
+            "target": "answer:25e74d4fd4f948be358654ec",
+            "label": "归类"
+          },
+          {
+            "id": "topic:d6543d3bdf2eedd9->answer:6237208fc181a01fa39e2e0d",
+            "source": "topic:d6543d3bdf2eedd9",
+            "target": "answer:6237208fc181a01fa39e2e0d",
+            "label": "归类"
+          },
+          {
+            "id": "topic:437c97a7c2abfc71->answer:6237208fc181a01fa39e2e0d",
+            "source": "topic:437c97a7c2abfc71",
+            "target": "answer:6237208fc181a01fa39e2e0d",
+            "label": "归类"
+          },
+          {
+            "id": "topic:d1af5b6220f76b6c->answer:be575ea4d72d33832a1ad77a",
+            "source": "topic:d1af5b6220f76b6c",
+            "target": "answer:be575ea4d72d33832a1ad77a",
+            "label": "归类"
+          }
+        ],
+        "total_sources": 3,
+        "truncated": false,
+        "classification": "按导入的 topics 标签分组；未标注归入未分类。"
+      }
+    },
+    "status": "通过",
+    "seconds": 0.0043,
+    "request": null
+  },
+  {
+    "title": "阅读 制卡 审查 问答完整流程",
+    "input": "POST /api/v1/companion/run",
+    "expected": "四个模块均有结果，主回答位于引用首位，事实证据排除自身",
+    "actual": {
+      "http_status": 200,
+      "body": {
+        "source_id": "25e74d4fd4f948be358654ec",
+        "reading": {
+          "source_id": "25e74d4fd4f948be358654ec",
+          "mode": "extractive",
+          "summary": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+          "sections": [
+            {
+              "index": 0,
+              "heading": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+              "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+              "key_points": [
+                "主动回忆是尝试在不看原文的情况下回想所学内容。",
+                "阅读结束后，可以合上资料，用自己的话复述要点。",
+                "遇到遗漏，再回到原文核对。"
+              ],
+              "guiding_question": "第 1 段的主张是什么，原文提供了哪些依据？"
+            }
+          ],
+          "notice": "当前采用分句与首句摘录，未进行语义推理；导读问题为模板。"
+        },
+        "cards": {
+          "cards": [
+            {
+              "front": "《如何通过主动回忆改善学习？》中，“主动回忆是尝试……”的完整表述是什么？",
+              "back": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+              "source_id": "25e74d4fd4f948be358654ec"
+            },
+            {
+              "front": "《如何通过主动回忆改善学习？》中，“阅读结束后，可……”的完整表述是什么？",
+              "back": "阅读结束后，可以合上资料，用自己的话复述要点。",
+              "source_id": "25e74d4fd4f948be358654ec"
+            },
+            {
+              "front": "《如何通过主动回忆改善学习？》中，“遇到遗漏……”的完整表述是什么？",
+              "back": "遇到遗漏，再回到原文核对。",
+              "source_id": "25e74d4fd4f948be358654ec"
+            },
+            {
+              "front": "《如何通过主动回忆改善学习？》中，“间隔复习是将复习……”的完整表述是什么？",
+              "back": "间隔复习是将复习安排在不同时间，而不是集中重复阅读。",
+              "source_id": "25e74d4fd4f948be358654ec"
+            },
+            {
+              "front": "《如何通过主动回忆改善学习？》中，“卡片应围绕一个……”的完整表述是什么？",
+              "back": "卡片应围绕一个清晰问题设计，答案尽量简洁。",
+              "source_id": "25e74d4fd4f948be358654ec"
+            }
+          ],
+          "notice": "自动摘录草稿，请检查问题质量与原文含义后再导入复习。"
+        },
+        "facts": {
+          "reviews": [
+            {
+              "claim": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+              "status": "mentioned_in_corpus",
+              "explanation": "语料中出现相同表述，尚未验证真实性。",
+              "evidence": [
+                {
+                  "source_id": "6237208fc181a01fa39e2e0d",
+                  "title": "怎样阅读一篇复杂长文？",
+                  "author_id": "demo-author-1",
+                  "url": null,
+                  "chunk_index": 0,
+                  "excerpt": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+                  "score": 1.0
+                }
+              ]
+            }
+          ],
+          "scope": "仅审查已导入语料。文本出现、相似度和作者观点均不能证明客观事实。"
+        },
+        "author": {
+          "answer": "以下为相关历史回答摘录，请结合原文判断：\n[1] 主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。\n[2] 阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+          "mode": "extractive",
+          "citations": [
+            {
+              "source_id": "25e74d4fd4f948be358654ec",
+              "title": "如何通过主动回忆改善学习？",
+              "author_id": "demo-author-1",
+              "url": null,
+              "chunk_index": 0,
+              "excerpt": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+              "score": 0.4286
+            },
+            {
+              "source_id": "6237208fc181a01fa39e2e0d",
+              "title": "怎样阅读一篇复杂长文？",
+              "author_id": "demo-author-1",
+              "url": null,
+              "chunk_index": 0,
+              "excerpt": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+              "score": 0.4286
+            }
+          ],
+          "identity_notice": "基于历史资料的阅读助手，不代表原答主本人或其当前观点。",
+          "citation_notice": "引用为实际检索资料；模型文字与引用的对应关系仍需人工核对。"
+        }
+      }
+    },
+    "status": "通过",
+    "seconds": 0.017,
+    "request": {
+      "source_id": "25e74d4fd4f948be358654ec",
+      "tasks": [
+        "reading",
+        "cards",
+        "facts",
+        "author"
+      ],
+      "question": "如何进行主动回忆？",
+      "claims": [
+        "主动回忆是尝试在不看原文的情况下回想所学内容。"
+      ]
+    }
+  },
+  {
+    "title": "TSV 文件下载",
+    "input": "POST /api/v1/cards/export/tsv",
+    "expected": "HTTP 200，包含 Tab 分隔声明和下载文件名",
+    "actual": {
+      "http_status": 200,
+      "body": "#separator:Tab\n#html:true\n#columns:Front\tBack\tSource\n《如何通过主动回忆改善学习？》中，“主动回忆是尝试……”的完整表述是什么？\t主动回忆是尝试在不看原文的情况下回想所学内容。\t25e74d4fd4f948be358654ec\n《如何通过主动回忆改善学习？》中，“阅读结束后，可……”的完整表述是什么？\t阅读结束后，可以合上资料，用自己的话复述要点。\t25e74d4fd4f948be358654ec\n《如何通过主动回忆改善学习？》中，“遇到遗漏……”的完整表述是什么？\t遇到遗漏，再回到原文核对。\t25e74d4fd4f948be358654ec"
+    },
+    "status": "通过",
+    "seconds": 0.002,
+    "request": {
+      "cards": [
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“主动回忆是尝试……”的完整表述是什么？",
+          "back": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        },
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“阅读结束后，可……”的完整表述是什么？",
+          "back": "阅读结束后，可以合上资料，用自己的话复述要点。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        },
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“遇到遗漏……”的完整表述是什么？",
+          "back": "遇到遗漏，再回到原文核对。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        },
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“间隔复习是将复习……”的完整表述是什么？",
+          "back": "间隔复习是将复习安排在不同时间，而不是集中重复阅读。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        },
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“卡片应围绕一个……”的完整表述是什么？",
+          "back": "卡片应围绕一个清晰问题设计，答案尽量简洁。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        }
+      ]
+    }
+  },
+  {
+    "title": "APKG 卡包下载",
+    "input": "POST /api/v1/cards/export/apkg",
+    "expected": "HTTP 200，ZIP 完整且含 collection.anki2",
+    "actual": {
+      "http_status": 200,
+      "body": {
+        "bytes": 3181,
+        "content_type": "application/octet-stream"
+      }
+    },
+    "status": "通过",
+    "seconds": 0.1139,
+    "request": {
+      "cards": [
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“主动回忆是尝试……”的完整表述是什么？",
+          "back": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        },
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“阅读结束后，可……”的完整表述是什么？",
+          "back": "阅读结束后，可以合上资料，用自己的话复述要点。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        },
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“遇到遗漏……”的完整表述是什么？",
+          "back": "遇到遗漏，再回到原文核对。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        },
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“间隔复习是将复习……”的完整表述是什么？",
+          "back": "间隔复习是将复习安排在不同时间，而不是集中重复阅读。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        },
+        {
+          "front": "《如何通过主动回忆改善学习？》中，“卡片应围绕一个……”的完整表述是什么？",
+          "back": "卡片应围绕一个清晰问题设计，答案尽量简洁。",
+          "source_id": "25e74d4fd4f948be358654ec"
+        }
+      ]
+    }
+  },
+  {
+    "title": "不存在的资料",
+    "input": "GET /api/v1/sources/not-found",
+    "expected": "HTTP 404，source_not_found",
+    "actual": {
+      "http_status": 404,
+      "body": {
+        "error": {
+          "code": "source_not_found",
+          "message": "未找到指定资料。"
+        }
+      }
+    },
+    "status": "通过",
+    "seconds": 0.0042,
+    "request": null
+  },
+  {
+    "title": "跨答主主回答拒绝",
+    "input": "POST /api/v1/author/ask",
+    "expected": "HTTP 422，author_mismatch",
+    "actual": {
+      "http_status": 422,
+      "body": {
+        "error": {
+          "code": "author_mismatch",
+          "message": "主回答不属于指定答主。"
+        }
+      }
+    },
+    "status": "通过",
+    "seconds": 0.0068,
+    "request": {
+      "author_id": "demo-author-2",
+      "question": "主动回忆",
+      "primary_source_id": "25e74d4fd4f948be358654ec"
+    }
+  },
+  {
+    "title": "互斥输入校验",
+    "input": "POST /api/v1/reading/analyze",
+    "expected": "同时提供 text/source_id 时 HTTP 422",
+    "actual": {
+      "http_status": 422,
+      "body": {
+        "detail": [
+          {
+            "type": "value_error",
+            "loc": [
+              "body"
+            ],
+            "msg": "Value error, source_id 和 text 必须且只能提供一个",
+            "input": {
+              "source_id": "25e74d4fd4f948be358654ec",
+              "text": "重复输入"
+            },
+            "ctx": {
+              "error": {}
+            }
+          }
+        ]
+      }
+    },
+    "status": "通过",
+    "seconds": 0.0017,
+    "request": {
+      "source_id": "25e74d4fd4f948be358654ec",
+      "text": "重复输入"
+    }
+  }
+]

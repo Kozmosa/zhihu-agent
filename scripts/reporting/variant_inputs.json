@@ -1,0 +1,19 @@
+{
+  "test_invalid_import[text-  ]": "首条资料 text 设置为两个空格，其余字段保留。",
+  "test_invalid_import[url-file:///etc/passwd]": "首条资料 url 设置为 file:///etc/passwd，其余字段保留。",
+  "test_invalid_import[title-]": "首条资料 title 设置为空字符串，其余字段保留。",
+  "test_reader_input_contract[body0]": "POST /api/v1/reading/analyze，请求体为 {}。",
+  "test_reader_input_contract[body1]": "请求体为 {text: x, source_id: x}，同时提供两个输入。",
+  "test_reader_input_contract[body2]": "请求体仅有 text，值为两个空格。",
+  "test_reader_input_contract[body3]": "请求体为 {text: a, chunk_size: 0}。",
+  "test_model_failures_are_explicit[500-payload0]": "MockTransport 模拟 HTTP 500，响应体 {}。",
+  "test_model_failures_are_explicit[200-payload1]": "MockTransport 模拟 HTTP 200，响应体 {}，缺少 response。",
+  "test_model_failures_are_explicit[200-payload2]": "MockTransport 模拟 HTTP 200，response 为一个空格。",
+  "test_model_failures_are_explicit[200-payload3]": "MockTransport 模拟 HTTP 200，response 为 []。",
+  "test_entry_rejects_invalid_ports[0]": "解析命令行 --port 0。",
+  "test_entry_rejects_invalid_ports[65536]": "解析命令行 --port 65536。",
+  "test_entry_rejects_invalid_ports[not-a-port]": "解析命令行 --port not-a-port。",
+  "test_browser_waits_for_own_healthy_server[False-ok-expected0]": "模拟 server.started=false、健康响应 status=ok；预期不打开浏览器。",
+  "test_browser_waits_for_own_healthy_server[True-failed-expected1]": "模拟 server.started=true、健康响应 status=failed；预期不打开浏览器。",
+  "test_browser_waits_for_own_healthy_server[True-ok-expected2]": "模拟 server.started=true、健康响应 status=ok；预期仅打开一次 /docs。"
+}

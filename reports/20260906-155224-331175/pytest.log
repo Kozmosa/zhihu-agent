@@ -1,0 +1,62 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-9.1.1, pluggy-1.6.0 -- E:\CzCode\codex\envs\zhijing\Scripts\python.exe
+cachedir: E:\CzCode\codex\cache\zhijing-pytest
+rootdir: E:\CzCode\ZhiJing Agent
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collecting ... collected 40 items
+
+tests/test_author.py::test_retrieval_preserves_citations PASSED          [  2%]
+tests/test_author.py::test_primary_source_first_and_no_other_authors PASSED [  5%]
+tests/test_author.py::test_wrong_author_rejected PASSED                  [  7%]
+tests/test_author.py::test_no_evidence_abstains PASSED                   [ 10%]
+tests/test_cards.py::test_card_export_tsv PASSED                         [ 12%]
+tests/test_cards.py::test_apkg_contains_valid_notes_and_stable_guids PASSED [ 15%]
+tests/test_entry.py::test_entry_rejects_invalid_ports[0] PASSED          [ 17%]
+tests/test_entry.py::test_entry_rejects_invalid_ports[65536] PASSED      [ 20%]
+tests/test_entry.py::test_entry_rejects_invalid_ports[not-a-port] PASSED [ 22%]
+tests/test_entry.py::test_check_from_another_directory_does_not_create_database PASSED [ 25%]
+tests/test_entry.py::test_check_reports_missing_dependency PASSED        [ 27%]
+tests/test_entry.py::test_check_rejects_invalid_model_provider PASSED    [ 30%]
+tests/test_entry.py::test_relative_data_path_is_anchored_to_project PASSED [ 32%]
+tests/test_entry.py::test_server_uses_requested_port_and_loopback PASSED [ 35%]
+tests/test_entry.py::test_failed_preflight_does_not_start_server PASSED  [ 37%]
+tests/test_entry.py::test_browser_waits_for_own_healthy_server[False-ok-expected0] PASSED [ 40%]
+tests/test_entry.py::test_browser_waits_for_own_healthy_server[True-failed-expected1] PASSED [ 42%]
+tests/test_entry.py::test_browser_waits_for_own_healthy_server[True-ok-expected2] PASSED [ 45%]
+tests/test_facts_companion.py::test_fact_review_never_equates_mention_with_truth PASSED [ 47%]
+tests/test_facts_companion.py::test_companion_integrates_all_features_and_excludes_self PASSED [ 50%]
+tests/test_facts_companion.py::test_companion_requires_explicit_claims PASSED [ 52%]
+tests/test_facts_companion.py::test_health_and_openapi PASSED            [ 55%]
+tests/test_ollama.py::test_ollama_sends_only_supplied_evidence PASSED    [ 57%]
+tests/test_ollama.py::test_model_failures_are_explicit[500-payload0] PASSED [ 60%]
+tests/test_ollama.py::test_model_failures_are_explicit[200-payload1] PASSED [ 62%]
+tests/test_ollama.py::test_model_failures_are_explicit[200-payload2] PASSED [ 65%]
+tests/test_ollama.py::test_model_failures_are_explicit[200-payload3] PASSED [ 67%]
+tests/test_reading_knowledge.py::test_long_unpunctuated_text_is_bounded PASSED [ 70%]
+tests/test_reading_knowledge.py::test_reader_preserves_content PASSED    [ 72%]
+tests/test_reading_knowledge.py::test_reader_input_contract[body0] PASSED [ 75%]
+tests/test_reading_knowledge.py::test_reader_input_contract[body1] PASSED [ 77%]
+tests/test_reading_knowledge.py::test_reader_input_contract[body2] PASSED [ 80%]
+tests/test_reading_knowledge.py::test_reader_input_contract[body3] PASSED [ 82%]
+tests/test_reading_knowledge.py::test_xyflow_graph_has_valid_edges PASSED [ 85%]
+tests/test_sources.py::test_import_is_idempotent_and_persistent PASSED   [ 87%]
+tests/test_sources.py::test_author_filter_and_pagination PASSED          [ 90%]
+tests/test_sources.py::test_invalid_import[text-  ] PASSED               [ 92%]
+tests/test_sources.py::test_invalid_import[url-file:///etc/passwd] PASSED [ 95%]
+tests/test_sources.py::test_invalid_import[title-] PASSED                [ 97%]
+tests/test_sources.py::test_missing_source PASSED                        [100%]
+
+============================== warnings summary ===============================
+..\codex\envs\zhijing\Lib\site-packages\fastapi\testclient.py:1
+  E:\CzCode\codex\envs\zhijing\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+..\codex\envs\zhijing\Lib\site-packages\starlette\testclient.py:53
+  E:\CzCode\codex\envs\zhijing\Lib\site-packages\starlette\testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+- generated xml file: E:\CzCode\ZhiJing Agent\reports\20260906-155224-331175\pytest.xml -
+======================= 40 passed, 2 warnings in 2.63s ========================

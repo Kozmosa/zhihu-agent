@@ -1,0 +1,15 @@
+{
+  "name": "ZhiJing Agent",
+  "version": "0.1.0",
+  "guide": "ZhiJing-Agent-工程指南.md",
+  "readme": "README.md",
+  "test_report_html": "运行测试报告.html",
+  "test_report_markdown": "运行测试报告.md",
+  "regenerate_report": "scripts/run_report.py",
+  "entry_python": "main.py",
+  "entry_windows": "Start.cmd",
+  "start_powershell": "& '.\\Start.cmd'",
+  "test_command": "python scripts/run_report.py",
+  "application_factory": "zhijing.app:create_app",
+  "api_prefix": "/api/v1"
+}

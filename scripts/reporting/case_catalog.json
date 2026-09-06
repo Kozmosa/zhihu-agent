@@ -1,0 +1,170 @@
+{
+  "test_import_is_idempotent_and_persistent": {
+    "module": "资料管理",
+    "title": "重复导入与重建应用后的持久化",
+    "input": "同一组样例资料连续导入两次，再用同一数据目录创建新应用。",
+    "expected": "两次导入结果相同；新应用列出 3 条资料，并可按 ID 取回与首次结果相同的第一条资料。"
+  },
+  "test_author_filter_and_pagination": {
+    "module": "资料管理",
+    "title": "答主筛选与分页",
+    "input": "查询答主 demo-author-1；另以 offset=2、limit=1 查询资料。",
+    "expected": "答主筛选返回 2 条且作者均匹配；分页查询返回 1 条。"
+  },
+  "test_invalid_import": {
+    "module": "资料管理",
+    "title": "非法资料导入拒绝（3 组参数）",
+    "input": "分别将首条资料正文改为空白、URL 改为 file:///etc/passwd、标题改为空串。",
+    "expected": "每组均返回 HTTP 422，资料列表保持为空。"
+  },
+  "test_missing_source": {
+    "module": "资料管理",
+    "title": "不存在的资料返回明确错误",
+    "input": "GET /api/v1/sources/missing。",
+    "expected": "返回 HTTP 404，业务错误码为 source_not_found。"
+  },
+  "test_retrieval_preserves_citations": {
+    "module": "检索与引用",
+    "title": "检索摘录可追溯且遵守答主范围",
+    "input": "以“主动回忆”为查询词，限定答主 demo-author-1。",
+    "expected": "结果非空；每条摘录均包含在对应资料正文中，作者均为指定答主。"
+  },
+  "test_primary_source_first_and_no_other_authors": {
+    "module": "答主问答",
+    "title": "主资料优先与答主隔离",
+    "input": "向 demo-author-1 提问“主动回忆”，指定第二条导入资料为主资料。",
+    "expected": "返回 HTTP 200、extractive 模式；首条引用来自指定主资料，全部引用作者匹配。"
+  },
+  "test_wrong_author_rejected": {
+    "module": "答主问答",
+    "title": "主资料与指定答主不匹配时拒绝",
+    "input": "向 demo-author-2 提问“阅读”，将第一条导入资料指定为主资料。",
+    "expected": "返回 HTTP 422，业务错误码为 author_mismatch。"
+  },
+  "test_no_evidence_abstains": {
+    "module": "答主问答",
+    "title": "无答主证据时说明无法回答",
+    "input": "向不存在的答主 unknown 提问“量子引力”。",
+    "expected": "引用列表为空，回答中包含“无法”。"
+  },
+  "test_long_unpunctuated_text_is_bounded": {
+    "module": "长文拆解",
+    "title": "无标点长文本按上限拆分",
+    "input": "将“长”重复 4100 次，调用 chunks，块大小上限设为 600。",
+    "expected": "拼接全部分块与原文完全一致；最大块长度不超过 600。"
+  },
+  "test_reader_preserves_content": {
+    "module": "长文拆解",
+    "title": "拆解接口保留全文且控制段落长度",
+    "input": "分析第一条导入资料，chunk_size=100。",
+    "expected": "返回 HTTP 200、extractive 模式；分段拼接等于原文，每段不超过 100 字符。"
+  },
+  "test_reader_input_contract": {
+    "module": "长文拆解",
+    "title": "拆解参数约束（4 组参数）",
+    "input": "分别提交空对象、同时提供 text 与 source_id、空白 text、chunk_size=0。",
+    "expected": "每组请求均返回 HTTP 422。"
+  },
+  "test_xyflow_graph_has_valid_edges": {
+    "module": "知识地图",
+    "title": "图节点、连边与截断元数据",
+    "input": "导入样例后获取知识地图，再以 limit=1 获取地图。",
+    "expected": "节点 ID 唯一；连边两端均指向现有节点；回答节点共 3 个；限量结果 truncated=true、total_sources=3。"
+  },
+  "test_card_export_tsv": {
+    "module": "记忆卡片",
+    "title": "卡片生成与 TSV 特殊字符处理",
+    "input": "生成 3 张卡片，将首张背面改为含 script 标签、换行和制表符的文本后导出 TSV。",
+    "expected": "生成与导出返回 HTTP 200；生成 3 张；script 标签已转义；TSV 解析为 3 行，首行有 3 列。"
+  },
+  "test_apkg_contains_valid_notes_and_stable_guids": {
+    "module": "记忆卡片",
+    "title": "APKG 文件结构、去重与稳定 GUID",
+    "input": "生成卡片，将同一组卡片重复拼接后连续导出两次 APKG，检查 ZIP 与内嵌 SQLite。",
+    "expected": "两次导出均 HTTP 200；ZIP 校验通过且仅含 collection.anki2、media；各含 3 条 notes 和 3 条 cards；GUID 一致；临时导出目录为空。"
+  },
+  "test_fact_review_never_equates_mention_with_truth": {
+    "module": "事实证据审查",
+    "title": "区分语料提及、相关证据与证据不足",
+    "input": "提交主动回忆定义、“主动回忆完全没有效果。”与无关字符串 zyxwv987654。",
+    "expected": "依次返回 mentioned_in_corpus、related_evidence、insufficient_evidence；首条说明含“尚未验证真实性”。"
+  },
+  "test_companion_integrates_all_features_and_excludes_self": {
+    "module": "组合任务",
+    "title": "四项功能联动与事实审查排除当前资料",
+    "input": "以第一条资料执行 reading、cards、facts、author，提交问题“主动回忆”及一条明确声明。",
+    "expected": "返回 HTTP 200；拆解段落与卡片非空；答主首条引用为当前资料；事实证据非空且不引用当前资料。"
+  },
+  "test_companion_requires_explicit_claims": {
+    "module": "组合任务",
+    "title": "事实审查任务要求显式声明",
+    "input": "指定资料并执行 facts 任务，省略 claims。",
+    "expected": "返回 HTTP 422。"
+  },
+  "test_health_and_openapi": {
+    "module": "服务基础",
+    "title": "健康检查与接口文档注册",
+    "input": "GET /health 与 GET /openapi.json。",
+    "expected": "健康检查 status=ok；OpenAPI 路径包含 /api/v1/companion/run。"
+  },
+  "test_ollama_sends_only_supplied_evidence": {
+    "module": "Ollama 适配器（模拟）",
+    "title": "MockTransport 验证请求证据与响应模式",
+    "input": "使用 httpx.MockTransport 模拟 Ollama；传入一条摘录“资料原文”，模拟返回有效回答。",
+    "expected": "请求 stream=false，提示词中首条证据文本为“资料原文”；返回 mode=ollama。此案例不连接真实模型。"
+  },
+  "test_model_failures_are_explicit": {
+    "module": "Ollama 适配器（模拟）",
+    "title": "MockTransport 验证模型失败转换（4 组参数）",
+    "input": "模拟 HTTP 500；或 HTTP 200 但缺少 response、response 为空白、response 为数组。",
+    "expected": "每组均抛出 DomainError，状态为 502。此案例不连接真实模型。"
+  },
+  "test_entry_rejects_invalid_ports": {
+    "module": "正式入口",
+    "title": "拒绝非法端口（3 组参数）",
+    "input": "分别以 --port 0、65536、not-a-port 解析启动参数。",
+    "expected": "每组均触发 SystemExit，退出码为 2。"
+  },
+  "test_check_from_another_directory_does_not_create_database": {
+    "module": "正式入口",
+    "title": "跨目录执行环境检查且不创建数据目录",
+    "input": "在临时目录启动独立 Python 子进程执行 main.py --check，使用临时数据路径与 extractive 模式。",
+    "expected": "退出码为 0；JSON 中 ready=true、项目根目录正确、依赖名称集合完整；指定数据目录未创建。"
+  },
+  "test_check_reports_missing_dependency": {
+    "module": "正式入口",
+    "title": "缺少依赖时提供明确检查错误",
+    "input": "通过 monkeypatch 模拟导入 genanki 时出现 ModuleNotFoundError，然后运行环境检查。",
+    "expected": "ready=false，错误列表含 Dependency unavailable: genanki。"
+  },
+  "test_check_rejects_invalid_model_provider": {
+    "module": "正式入口",
+    "title": "检查入口拒绝不支持的模型提供方",
+    "input": "设置 ZHIJING_MODEL_PROVIDER=unsupported，再调用 CLI 的 --check。",
+    "expected": "CLI 返回 2；输出 JSON 的首条错误包含 ZHIJING_MODEL_PROVIDER。"
+  },
+  "test_relative_data_path_is_anchored_to_project": {
+    "module": "正式入口",
+    "title": "相对数据路径以项目根目录为基准",
+    "input": "工作目录切到临时目录，设置 ZHIJING_DATA_DIR=local-data 后运行环境检查。",
+    "expected": "报告的数据路径等于项目根目录/local-data；临时工作目录下未创建 local-data。"
+  },
+  "test_server_uses_requested_port_and_loopback": {
+    "module": "正式入口（模拟）",
+    "title": "启动参数正确传给 Uvicorn",
+    "input": "以 FakeServer 替换 uvicorn.Server，在 extractive 模式调用 CLI --port 8765。",
+    "expected": "CLI 返回 0；服务配置为 127.0.0.1:8765、factory=true、应用 zhijing.app:create_app。此案例不监听真实端口。"
+  },
+  "test_failed_preflight_does_not_start_server": {
+    "module": "正式入口（模拟）",
+    "title": "启动预检失败时返回错误退出码",
+    "input": "模拟环境检查返回 ready=false 与 Missing dependency，再调用默认 CLI。",
+    "expected": "CLI 返回 2，标准错误输出包含 Missing dependency。"
+  },
+  "test_browser_waits_for_own_healthy_server": {
+    "module": "正式入口（模拟）",
+    "title": "文档打开时机（3 组参数）",
+    "input": "模拟服务未启动且健康、已启动但不健康、已启动且健康；替换 HTTP、线程和浏览器打开函数。",
+    "expected": "前两组均不记录浏览器打开操作；第三组仅记录 http://127.0.0.1:8765/docs。此案例不实际打开浏览器。"
+  }
+}
