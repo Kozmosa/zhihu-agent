@@ -8,7 +8,7 @@
 </style>
 </head>
 <body>
-<header><nav><div class="brand"><span class="mark">知</span><span>知境 <span class="en">ZHIJING AGENT</span></span></div><a href="/docs" target="_blank" rel="noopener">开发者 API 文档 ↗</a></nav></header>
+<header><nav><div class="brand"><span class="mark">知</span><span>知境 <span class="en">ZHIJING AGENT</span></span></div><div><a href="/workspace">进入知识工作台 →</a>　 <a href="/docs" target="_blank" rel="noopener">API 文档 ↗</a></div></nav></header>
 <main>
 <div class="intro"><div><div class="eyebrow">模型与连接 / CONNECTION</div><h1>让知识，与你对话。</h1><p>连接你的模型 API，开启有原文依据的阅读与整理。</p></div><span class="badge"><span class="dot"></span>本机工作空间</span></div>
 <div class="layout"><div>
@@ -33,7 +33,7 @@
 <section class="panel"><div class="panel-head"><span class="number">02</span><h2>试读一段文字</h2></div><p class="hint" style="margin-bottom:14px">使用右侧显示的当前模式。启用模型后，输入内容会发送至该模型服务。</p><label for="reading-text">阅读内容</label><textarea id="reading-text" placeholder="粘贴你想拆解的文字，查看摘要与分段分析……" maxlength="100000"></textarea><div class="actions"><button id="read" type="button">开始拆解</button></div><div id="reading-status" class="status" role="status" aria-live="polite"></div><div id="reading-result"></div></section>
 </div><aside>
 <section class="panel active-card"><div class="eyebrow">CURRENT SESSION</div><div class="active-title" id="active-provider">正在读取状态…</div><p class="model-name" id="active-model">连接本地服务</p><div class="stat-row"><span>服务状态</span><strong id="health">检查中</strong></div><div class="stat-row"><span>配置有效期</span><span>当前服务会话</span></div><button id="offline" type="button" style="margin-top:20px">切回离线模式</button></section>
-<section class="panel"><h3>一个连接，五种能力</h3><div class="feature"><span class="tick">↳</span><div><b>长文拆解</b><p>保留原文，梳理摘要和段落。</p></div></div><div class="feature"><span class="tick">↳</span><div><b>答主问答</b><p>基于导入资料回答，附上引用。</p></div></div><div class="feature"><span class="tick">↳</span><div><b>记忆卡片</b><p>生成有据可查的复习卡片。</p></div></div><div class="feature"><span class="tick">↳</span><div><b>事实审查</b><p>对照语料证据，分析主张关系。</p></div></div><div class="feature"><span class="tick">↳</span><div><b>知识地图</b><p>提取概念及有证据的关联。</p></div></div><a class="small-link" href="/docs" target="_blank" rel="noopener">导入资料与测试全部能力 ↗</a></section>
+<section class="panel"><h3>一个连接，五种能力</h3><div class="feature"><span class="tick">↳</span><div><b>长文拆解</b><p>保留原文，梳理摘要和段落。</p></div></div><div class="feature"><span class="tick">↳</span><div><b>答主问答</b><p>基于导入资料回答，附上引用。</p></div></div><div class="feature"><span class="tick">↳</span><div><b>记忆卡片</b><p>生成有据可查的复习卡片。</p></div></div><div class="feature"><span class="tick">↳</span><div><b>事实审查</b><p>对照语料证据，分析主张关系。</p></div></div><div class="feature"><span class="tick">↳</span><div><b>知识地图</b><p>提取概念及有证据的关联。</p></div></div><a class="small-link" href="/workspace">导入资料与使用全部能力 →</a></section>
 <p class="hint" style="padding:0 6px">连接测试通过表示接口和 JSON 输出可用。模型分析质量仍需结合原文核对。</p>
 </aside></div><footer>知境 · 从阅读到理解</footer>
 </main>

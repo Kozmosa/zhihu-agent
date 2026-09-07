@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import Field, SecretStr, ValidationError
 from starlette.concurrency import run_in_threadpool
 
@@ -70,17 +70,37 @@ def guard(request: Request):
 
 @router.get("/", include_in_schema=False, dependencies=[Depends(guard)])
 def configuration_page(request: Request):
-    template = Path(__file__).with_name("web").joinpath("settings.html").read_text("utf-8")
+    return render_page(request, "settings.html")
+
+
+def render_page(request: Request, filename: str):
+    template = Path(__file__).with_name("web").joinpath(filename).read_text("utf-8")
     return HTMLResponse(
         template.replace("__CONFIG_TOKEN__", request.app.state.config_token),
         headers={
             "Cache-Control": "no-store",
             "Content-Security-Policy": "default-src 'self'; script-src 'nonce-"
             + request.app.state.config_token
-            + "'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+            + "'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
             "Referrer-Policy": "no-referrer",
             "X-Content-Type-Options": "nosniff",
         },
+    )
+
+
+@router.get("/workspace", include_in_schema=False, dependencies=[Depends(guard)])
+def workspace_page(request: Request):
+    return render_page(request, "workspace.html")
+
+
+@router.get("/assets/{filename}", include_in_schema=False, dependencies=[Depends(guard)])
+def workspace_asset(filename: str):
+    if filename not in {"workspace.js", "workspace.css"}:
+        raise DomainError("asset_not_found", "未找到页面资源。", 404)
+    return FileResponse(
+        Path(__file__).with_name("web") / filename,
+        media_type="text/javascript" if filename.endswith(".js") else "text/css",
+        headers={"Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff"},
     )
 
 

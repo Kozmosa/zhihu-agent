@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>知境 · 知识工作台</title>
+  <link rel="stylesheet" href="/assets/workspace.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到工作区</a>
+<header><a class="brand" href="/workspace"><span class="mark">知</span>知境 <small>知识工作台</small></a><nav aria-label="全局导航"><span id="service-mode" class="badge">正在连接…</span><a href="/">模型配置</a><a href="/docs" target="_blank" rel="noopener">API 文档 ↗</a></nav></header>
+<div class="shell">
+<aside class="library" aria-label="资料库">
+  <div class="library-title"><h2>我的资料</h2><button id="reload-sources" type="button" class="quiet">刷新</button></div>
+  <p class="muted">先导入，再选择一篇开始探索。</p>
+  <button id="open-import" type="button" class="primary wide">＋ 导入资料</button>
+  <form id="source-filter-form"><label for="source-filter">按作者 ID 筛选</label><div class="inline"><input id="source-filter" placeholder="留空查看全部" maxlength="200"><button type="submit">筛选</button></div></form>
+  <div id="library-status" class="status" role="status" aria-live="polite"></div>
+  <div id="source-list" class="source-list"></div>
+  <div class="pager"><button id="prev-page" type="button">上一页</button><span id="page-number">第 1 页</span><button id="next-page" type="button">下一页</button></div>
+</aside>
+<main id="main">
+  <div class="intro"><div class="eyebrow">READ · QUESTION · CONNECT</div><h1>把阅读，变成自己的知识。</h1><p>五种能力，共用一份可追溯的资料。</p></div>
+  <section id="import-panel" class="panel" hidden aria-labelledby="import-heading">
+    <div class="panel-title"><h2 id="import-heading">导入阅读资料</h2><button id="close-import" type="button" class="quiet">收起</button></div>
+    <p class="muted">粘贴正文保存到本地资料库。填写来源链接不会自动抓取网页。</p>
+    <form id="import-form">
+      <label for="import-title">标题</label><input id="import-title" required maxlength="200" placeholder="这篇资料的标题">
+      <div class="two"><div><label for="import-author-name">作者名称</label><input id="import-author-name" required maxlength="200" placeholder="显示名称"></div><div><label for="import-author-id">作者 ID</label><input id="import-author-id" required maxlength="200" placeholder="例如 author-001"></div></div>
+      <p class="muted small">同一作者请使用相同 ID，问答会参考该作者的已导入资料。</p>
+      <label for="import-text">资料正文</label><textarea id="import-text" required maxlength="100000" rows="8" placeholder="粘贴原文（最多 100,000 字符）"></textarea>
+      <div class="two"><div><label for="import-url">来源链接（可选）</label><input id="import-url" type="url" placeholder="https://…"></div><div><label for="import-topics">主题标签（可选）</label><input id="import-topics" placeholder="用逗号分隔，如：学习,记忆"></div></div>
+      <div class="actions"><button class="primary" type="submit">保存并选中</button></div>
+    </form>
+    <details class="batch"><summary>从 JSON 批量导入</summary><p class="muted small">支持项目 examples/sources.json 格式，一次最多 20 条。重复导入相同内容不会新增重复记录。</p><label for="import-file">选择 JSON 文件</label><input id="import-file" type="file" accept=".json,application/json"><button id="import-json" type="button">导入文件</button></details>
+    <div id="import-status" class="status" role="status" aria-live="polite"></div>
+  </section>
+  <section class="selection panel" aria-labelledby="selected-title"><div class="eyebrow">当前资料</div><h2 id="selected-title">还没有选择资料</h2><p id="selected-meta">在左侧选择，或导入你的第一篇文章。</p><details id="source-preview" hidden><summary>查看完整原文</summary><div id="selected-text" class="original"></div><a id="selected-url" target="_blank" rel="noopener noreferrer" hidden>查看来源网页 ↗</a></details></section>
+  <div class="tabs" role="tablist" aria-label="知识能力">
+    <button id="tab-reading" role="tab" aria-selected="true" aria-controls="pane-reading" tabindex="0" data-tab="reading">01 长文拆解</button>
+    <button id="tab-author" role="tab" aria-selected="false" aria-controls="pane-author" tabindex="-1" data-tab="author">02 答主问答</button>
+    <button id="tab-cards" role="tab" aria-selected="false" aria-controls="pane-cards" tabindex="-1" data-tab="cards">03 记忆卡片</button>
+    <button id="tab-facts" role="tab" aria-selected="false" aria-controls="pane-facts" tabindex="-1" data-tab="facts">04 事实审查</button>
+    <button id="tab-knowledge" role="tab" aria-selected="false" aria-controls="pane-knowledge" tabindex="-1" data-tab="knowledge">05 知识地图</button>
+  </div>
+  <p class="model-notice" id="model-notice">正在读取当前模式。启用模型后，相关资料与问题会发送到所配置的模型服务。</p>
+  <section id="pane-reading" role="tabpanel" aria-labelledby="tab-reading" class="panel">
+    <h2>读懂文章的脉络</h2><p class="muted">梳理摘要、段落要点与导读问题，随时对照原文。</p>
+    <form id="reading-form"><div class="actions"><button id="run-reading" class="primary requires-source" type="submit" disabled>拆解当前资料</button></div></form>
+    <div id="reading-status" class="status" role="status" aria-live="polite"></div><div id="reading-result" class="results"></div>
+  </section>
+  <section id="pane-author" role="tabpanel" aria-labelledby="tab-author" class="panel" hidden>
+    <h2>带着问题，回到作者的资料</h2><p class="muted">以当前文章为主要资料，参考同一作者的已导入内容。助手不代表作者本人。</p>
+    <form id="author-form"><label for="author-question">你想问什么？</label><textarea id="author-question" required maxlength="2000" rows="3" placeholder="作者提出了哪些方法？分别适用于什么情况？"></textarea><div class="actions"><button id="run-author" class="primary requires-source" type="submit" disabled>根据资料回答</button></div></form>
+    <div id="author-status" class="status" role="status" aria-live="polite"></div><div id="author-result" class="results"></div>
+  </section>
+  <section id="pane-cards" role="tabpanel" aria-labelledby="tab-cards" class="panel" hidden>
+    <h2>把理解变成可复习的卡片</h2><p class="muted">卡片来自当前文章。核对答案与原文依据后，再导出到复习工具。</p>
+    <form id="cards-form"><div class="two"><div><label for="card-count">卡片数量（最多）</label><input id="card-count" type="number" min="1" max="30" value="5" required></div><div><label for="deck-name">导出牌组名称</label><input id="deck-name" maxlength="200" value="知境::阅读卡片" required></div></div><div class="actions"><button id="run-cards" class="primary requires-source" type="submit" disabled>生成卡片</button><button id="export-tsv" type="button" disabled>导出 TSV</button><button id="export-apkg" type="button" disabled>导出 Anki APKG</button></div></form>
+    <div id="cards-status" class="status" role="status" aria-live="polite"></div><div id="cards-result" class="results card-grid"></div>
+  </section>
+  <section id="pane-facts" role="tabpanel" aria-labelledby="tab-facts" class="panel" hidden>
+    <h2>让主张与证据相互对照</h2><p class="muted">仅检索本地已导入资料，不进行互联网事实核查。</p>
+    <form id="facts-form"><label for="fact-claims">待审查的主张（每行一条，最多 20 条）</label><textarea id="fact-claims" required rows="4" placeholder="主动回忆比反复重读更有效。"></textarea><div class="two"><div><label for="fact-scope">检索范围</label><select id="fact-scope"><option value="all">全部已导入资料</option><option value="author">当前作者的资料</option></select></div><div class="check"><label><input id="exclude-current" type="checkbox" checked> 排除当前文章，避免用自身举证</label></div></div><div class="actions"><button id="run-facts" class="primary" type="submit">审查主张</button></div></form>
+    <div id="facts-status" class="status" role="status" aria-live="polite"></div><div id="facts-result" class="results"></div>
+  </section>
+  <section id="pane-knowledge" role="tabpanel" aria-labelledby="tab-knowledge" class="panel" hidden>
+    <h2>看见知识之间的联系</h2><p class="muted">离线模式按主题组织文章；模型模式从资料提取概念与有引用的关系。</p>
+    <form id="knowledge-form"><div class="two"><div><label for="graph-scope">资料范围</label><select id="graph-scope"><option value="all">全部已导入资料</option><option value="author">当前作者的资料</option></select></div><div><label for="graph-limit">最多使用多少篇资料</label><input id="graph-limit" type="number" min="1" max="500" value="20" required></div></div><div class="actions"><button id="run-knowledge" class="primary" type="submit">生成知识地图</button></div></form>
+    <div id="knowledge-status" class="status" role="status" aria-live="polite"></div><div id="knowledge-result" class="results"></div>
+  </section>
+  <footer>知境 · 让每一次理解，都有出处</footer>
+</main></div>
+<script src="/assets/workspace.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
+</body></html>
