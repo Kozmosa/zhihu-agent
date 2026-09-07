@@ -19,6 +19,8 @@ class CitedAnswer(Schema):
 
 
 class OllamaGenerator:
+    mode = "ollama"
+
     def __init__(
         self,
         client: httpx.Client,
@@ -97,4 +99,4 @@ class OllamaGenerator:
             raise DomainError(
                 "model_invalid_response", "模型引用编号不存在、重复或与回答中的标记不一致。", 502
             )
-        return Generation(text=result.answer, mode="ollama")
+        return Generation(text=result.answer, mode=self.mode)

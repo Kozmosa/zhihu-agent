@@ -45,6 +45,6 @@ class KnowledgeGraph(Schema):
     edges: list[GraphEdge]
     total_sources: int
     truncated: bool
-    mode: Literal["extractive", "ollama"] = "extractive"
+    mode: Literal["extractive", "ollama", "openai"] = "extractive"
     classification: str = "按导入的 topics 标签分组；未标注归入未分类。"
     analysis_notice: str = "节点和连线表达资料组织方式，不代表已验证的客观事实。"

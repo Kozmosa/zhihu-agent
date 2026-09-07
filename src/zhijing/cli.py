@@ -22,7 +22,9 @@ def valid_port(value: str) -> int:
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="ZhiJing Agent server (local access only)")
     parser.add_argument("--port", type=valid_port, default=8000, help="HTTP port (default: 8000)")
-    parser.add_argument("--open-browser", action="store_true", help="Open /docs when healthy")
+    parser.add_argument(
+        "--open-browser", action="store_true", help="Open model settings when healthy"
+    )
     parser.add_argument(
         "--check", action="store_true", help="Check environment without starting HTTP"
     )
@@ -47,7 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
     base_url = f"http://127.0.0.1:{args.port}"
-    print(f"ZhiJing Agent | API documentation: {base_url}/docs", flush=True)
+    print(f"ZhiJing Agent | Model settings: {base_url}/", flush=True)
+    print(f"API documentation: {base_url}/docs", flush=True)
     print(f"Data directory: {report['data_dir']}", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
     server = uvicorn.Server(

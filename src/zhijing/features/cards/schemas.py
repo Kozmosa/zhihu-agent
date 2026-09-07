@@ -19,7 +19,7 @@ class Card(Schema):
 
 class CardSet(Schema):
     cards: list[Card]
-    mode: Literal["extractive", "ollama"] = "extractive"
+    mode: Literal["extractive", "ollama", "openai"] = "extractive"
     notice: str = "自动摘录草稿，请检查问题质量与原文含义后再导入复习。"
 
 

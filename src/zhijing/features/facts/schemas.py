@@ -36,6 +36,6 @@ class EvidenceAnalysis(Schema):
 
 class FactResult(Schema):
     reviews: list[ClaimReview]
-    mode: Literal["extractive", "ollama"] = "extractive"
+    mode: Literal["extractive", "ollama", "openai"] = "extractive"
     scope: str = "仅审查已导入语料。文本出现、相似度和作者观点均不能证明客观事实。"
     analysis_notice: str = "审查结果仅描述当前语料与主张的关系，不代表独立的客观真实性证明。"

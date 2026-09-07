@@ -52,6 +52,6 @@ class CardService:
                 )
         return CardSet(
             cards=[Card(source_id=source.id, **card.model_dump()) for card in result.cards],
-            mode="ollama",
+            mode=getattr(self.generator, "mode", "ollama"),
             notice="问题与答案由模型生成；证据摘录已核对为原文片段，但答案含义仍需人工核查。",
         )

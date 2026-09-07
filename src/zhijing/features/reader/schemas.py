@@ -27,7 +27,7 @@ class Section(Schema):
 
 class ReadingResult(Schema):
     source_id: str | None
-    mode: Literal["extractive", "ollama"] = "extractive"
+    mode: Literal["extractive", "ollama", "openai"] = "extractive"
     summary: str
     sections: list[Section]
     notice: str = "当前采用分句与首句摘录，未进行语义推理；导读问题为模板。"

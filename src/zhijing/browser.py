@@ -1,4 +1,4 @@
-"""Open API documentation only after this server has become healthy."""
+"""Open model settings only after this server has become healthy."""
 
 import json
 import webbrowser
@@ -18,7 +18,7 @@ def open_docs_when_ready(server, base_url: str, stop: Event) -> Thread:
             try:
                 with opener.open(f"{base_url}/health", timeout=1) as response:
                     if json.load(response).get("status") == "ok":
-                        webbrowser.open(f"{base_url}/docs")
+                        webbrowser.open(f"{base_url}/")
                         return
             except (URLError, OSError, ValueError):
                 continue

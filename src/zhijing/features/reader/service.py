@@ -55,7 +55,7 @@ class ReaderService:
         by_index = {section.index: section for section in result.sections}
         return ReadingResult(
             source_id=source_id,
-            mode="ollama",
+            mode=getattr(self.generator, "mode", "ollama"),
             summary=result.summary,
             sections=[
                 Section(text=text, **by_index[index].model_dump())

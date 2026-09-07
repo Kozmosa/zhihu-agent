@@ -19,11 +19,42 @@ class Settings:
     ollama_max_input_chars: int = 120000
     ollama_num_predict: int = 4096
     ollama_num_ctx: int = 32768
+    openai_url: str = "https://api.deepseek.com/v1"
+    openai_model: str = ""
+    openai_api_key: str = field(default="", repr=False)
+    openai_timeout: float = 120
+    openai_format: str = "json"
+    openai_max_input_chars: int = 120000
+    openai_max_tokens: int = 4096
+    openai_context_window: int = 32768
 
     def validation_errors(self) -> list[str]:
         errors = []
-        if self.model_provider not in {"extractive", "ollama"}:
-            errors.append("ZHIJING_MODEL_PROVIDER must be extractive or ollama.")
+        if self.model_provider not in {"extractive", "ollama", "openai"}:
+            errors.append("ZHIJING_MODEL_PROVIDER must be extractive, ollama, or openai.")
+        if self.model_provider == "openai":
+            # Reuse the same URL, credential and budget validation for both protocols.
+            mapped = Settings(
+                data_dir=self.data_dir,
+                model_provider="ollama",
+                ollama_url=self.openai_url,
+                ollama_model=self.openai_model,
+                ollama_api_key=self.openai_api_key,
+                ollama_timeout=self.openai_timeout,
+                ollama_format=self.openai_format,
+                ollama_max_input_chars=self.openai_max_input_chars,
+                ollama_num_predict=self.openai_max_tokens,
+                ollama_num_ctx=self.openai_context_window,
+            )
+            errors.extend(
+                error.replace("OLLAMA", "OPENAI")
+                .replace("NUM_PREDICT", "MAX_TOKENS")
+                .replace("NUM_CTX", "CONTEXT_WINDOW")
+                for error in mapped.validation_errors()
+            )
+            if self.openai_format not in {"json", "prompt"}:
+                errors.append("ZHIJING_OPENAI_FORMAT must be json or prompt.")
+            return errors
         if self.ollama_format not in {"schema", "json", "prompt"}:
             errors.append("ZHIJING_OLLAMA_FORMAT must be schema, json, or prompt.")
         if not self.ollama_model.strip():
@@ -77,6 +108,14 @@ class Settings:
             ollama_max_input_chars=_number("ZHIJING_OLLAMA_MAX_INPUT_CHARS", "120000", int),
             ollama_num_predict=_number("ZHIJING_OLLAMA_NUM_PREDICT", "4096", int),
             ollama_num_ctx=_number("ZHIJING_OLLAMA_NUM_CTX", "32768", int),
+            openai_url=os.getenv("ZHIJING_OPENAI_URL", "https://api.deepseek.com/v1"),
+            openai_model=os.getenv("ZHIJING_OPENAI_MODEL", ""),
+            openai_api_key=os.getenv("ZHIJING_OPENAI_API_KEY", ""),
+            openai_timeout=_number("ZHIJING_OPENAI_TIMEOUT", "120", float),
+            openai_format=os.getenv("ZHIJING_OPENAI_FORMAT", "json"),
+            openai_max_input_chars=_number("ZHIJING_OPENAI_MAX_INPUT_CHARS", "120000", int),
+            openai_max_tokens=_number("ZHIJING_OPENAI_MAX_TOKENS", "4096", int),
+            openai_context_window=_number("ZHIJING_OPENAI_CONTEXT_WINDOW", "32768", int),
         )
 
 

@@ -19,7 +19,7 @@ class StubGenerator:
 
 @pytest.fixture
 def setup(client):
-    base = client.app.state.container.facts
+    base = client.app.state.runtime.current.container.facts
     sources = [
         base.repository.save(
             SourceDraft(

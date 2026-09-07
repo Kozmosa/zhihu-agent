@@ -104,7 +104,7 @@ def test_failed_preflight_does_not_start_server(monkeypatch, capsys):
 
 @pytest.mark.parametrize(
     "started,health,expected",
-    [(False, "ok", []), (True, "failed", []), (True, "ok", ["http://127.0.0.1:8765/docs"])],
+    [(False, "ok", []), (True, "failed", []), (True, "ok", ["http://127.0.0.1:8765/"])],
 )
 def test_browser_waits_for_own_healthy_server(monkeypatch, started, health, expected):
     opened = []

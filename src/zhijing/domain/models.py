@@ -46,4 +46,4 @@ class Citation(Schema):
 
 class Generation(Schema):
     text: str
-    mode: Literal["extractive", "ollama"]
+    mode: Literal["extractive", "ollama", "openai"]

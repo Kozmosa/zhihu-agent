@@ -16,6 +16,7 @@ from zhijing.features.retrieval.service import LexicalRetriever
 from zhijing.features.sources.service import SourceService
 from zhijing.infrastructure.generation import ExtractiveGenerator
 from zhijing.infrastructure.ollama import OllamaGenerator
+from zhijing.infrastructure.openai_compatible import OpenAICompatibleGenerator
 from zhijing.infrastructure.sqlite_sources import SQLiteSourceRepository
 
 
@@ -64,6 +65,24 @@ def build_container(settings: Settings) -> Container:
             max_input_chars=settings.ollama_max_input_chars,
             num_predict=settings.ollama_num_predict,
             num_ctx=settings.ollama_num_ctx,
+        )
+        generator = structured
+    elif settings.model_provider == "openai":
+        client = httpx.Client(
+            base_url=settings.openai_url,
+            timeout=settings.openai_timeout,
+            headers={"Authorization": f"Bearer {settings.openai_api_key}"}
+            if settings.openai_api_key
+            else {},
+            trust_env=False,
+        )
+        structured = OpenAICompatibleGenerator(
+            client,
+            settings.openai_model,
+            output_format=settings.openai_format,
+            max_input_chars=settings.openai_max_input_chars,
+            num_predict=settings.openai_max_tokens,
+            num_ctx=settings.openai_context_window,
         )
         generator = structured
     sources = SourceService(repository)

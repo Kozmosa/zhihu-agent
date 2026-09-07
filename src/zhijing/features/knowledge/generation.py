@@ -86,7 +86,7 @@ def build_model_graph(
         edges=edges,
         total_sources=total_sources,
         truncated=total_sources > len(sources),
-        mode="ollama",
+        mode=getattr(generator, "mode", "ollama"),
         classification="模型根据所选资料提取概念和有引用的语义关系。",
         analysis_notice="概念和关系是模型分析；引用可追溯到原文，仍需核对语义与适用条件。",
     )

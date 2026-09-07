@@ -71,7 +71,7 @@ class FactService:
             )
         return FactResult(
             reviews=reviews,
-            mode="ollama" if model_used else "extractive",
+            mode=getattr(self.generator, "mode", "ollama") if model_used else "extractive",
             analysis_notice=(
                 "模型分析仅判断检索证据与主张的语义关系，可能有误；不代表客观真实性证明。"
                 if model_used
