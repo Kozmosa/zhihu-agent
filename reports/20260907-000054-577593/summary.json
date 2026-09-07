@@ -1,0 +1,2724 @@
+{
+  "timestamp": "2026-09-07T00:00:54+08:00",
+  "evidence": "reports\\20260907-000054-577593",
+  "environment": {
+    "Python": "3.12.7",
+    "解释器": "E:\\CzCode\\codex\\envs\\zhijing\\Scripts\\python.exe",
+    "系统": "Windows-11-10.0.26200-SP0",
+    "数据模式": "离线基线 + Ollama 模拟服务；独立临时数据库",
+    "fastapi": "0.141.1",
+    "uvicorn": "0.52.4",
+    "pydantic": "2.13.5",
+    "httpx": "0.28.1",
+    "pytest": "9.1.1",
+    "ruff": "0.16.6",
+    "genanki": "0.13.1"
+  },
+  "checks": [
+    {
+      "name": "pytest 全量测试",
+      "command": [
+        "E:\\CzCode\\codex\\envs\\zhijing\\Scripts\\python.exe",
+        "-m",
+        "pytest",
+        "-v",
+        "--junitxml=E:\\CzCode\\ZhiJing Agent\\reports\\20260907-000054-577593\\pytest.xml",
+        "--basetemp=E:\\CzCode\\codex\\qa\\zhijing-report-20260907-000054-577593\\pytest",
+        "-o",
+        "cache_dir=E:\\CzCode\\codex\\cache\\zhijing-pytest"
+      ],
+      "exit_code": 0,
+      "seconds": 8.805,
+      "log": "reports\\20260907-000054-577593\\pytest.log"
+    },
+    {
+      "name": "Ruff 代码检查",
+      "command": [
+        "E:\\CzCode\\codex\\envs\\zhijing\\Scripts\\python.exe",
+        "-m",
+        "ruff",
+        "check",
+        "main.py",
+        "src",
+        "tests",
+        "scripts",
+        "--cache-dir",
+        "E:\\CzCode\\codex\\cache\\zhijing-ruff"
+      ],
+      "exit_code": 0,
+      "seconds": 0.1304,
+      "log": "reports\\20260907-000054-577593\\ruff-check.log"
+    },
+    {
+      "name": "Ruff 格式检查",
+      "command": [
+        "E:\\CzCode\\codex\\envs\\zhijing\\Scripts\\python.exe",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "main.py",
+        "src",
+        "tests",
+        "scripts",
+        "--cache-dir",
+        "E:\\CzCode\\codex\\cache\\zhijing-ruff"
+      ],
+      "exit_code": 0,
+      "seconds": 0.1255,
+      "log": "reports\\20260907-000054-577593\\ruff-format.log"
+    },
+    {
+      "name": "正式入口环境自检",
+      "command": [
+        "E:\\CzCode\\codex\\envs\\zhijing\\Scripts\\python.exe",
+        "main.py",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.8658,
+      "log": "reports\\20260907-000054-577593\\entry-check.json"
+    },
+    {
+      "name": "五项能力 Ollama HTTP 模拟联调",
+      "command": [
+        "E:\\CzCode\\codex\\envs\\zhijing\\Scripts\\python.exe",
+        "scripts/ollama_smoke.py",
+        "--mock",
+        "--work-root",
+        "E:\\CzCode\\codex\\qa\\zhijing-report-20260907-000054-577593\\ollama",
+        "--report",
+        "E:\\CzCode\\ZhiJing Agent\\reports\\20260907-000054-577593\\ollama-http.json"
+      ],
+      "exit_code": 0,
+      "seconds": 2.8611,
+      "log": "reports\\20260907-000054-577593\\ollama-http.log"
+    }
+  ],
+  "tests": [
+    {
+      "id": "UT-001",
+      "module": "检索与引用",
+      "title": "检索摘录可追溯且遵守答主范围",
+      "input": "以“主动回忆”为查询词，限定答主 demo-author-1。",
+      "expected": "结果非空；每条摘录均包含在对应资料正文中，作者均为指定答主。",
+      "status": "通过",
+      "seconds": 0.108,
+      "node": "tests.test_author::test_retrieval_preserves_citations",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-002",
+      "module": "答主问答",
+      "title": "主资料优先与答主隔离",
+      "input": "向 demo-author-1 提问“主动回忆”，指定第二条导入资料为主资料。",
+      "expected": "返回 HTTP 200、extractive 模式；首条引用来自指定主资料，全部引用作者匹配。",
+      "status": "通过",
+      "seconds": 0.087,
+      "node": "tests.test_author::test_primary_source_first_and_no_other_authors",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-003",
+      "module": "答主问答",
+      "title": "主资料与指定答主不匹配时拒绝",
+      "input": "向 demo-author-2 提问“阅读”，将第一条导入资料指定为主资料。",
+      "expected": "返回 HTTP 422，业务错误码为 author_mismatch。",
+      "status": "通过",
+      "seconds": 0.087,
+      "node": "tests.test_author::test_wrong_author_rejected",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-004",
+      "module": "答主问答",
+      "title": "无答主证据时说明无法回答",
+      "input": "向不存在的答主 unknown 提问“量子引力”。",
+      "expected": "引用列表为空，回答中包含“无法”。",
+      "status": "通过",
+      "seconds": 0.084,
+      "node": "tests.test_author::test_no_evidence_abstains",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-005",
+      "module": "记忆卡片",
+      "title": "卡片生成与 TSV 特殊字符处理",
+      "input": "生成 3 张卡片，将首张背面改为含 script 标签、换行和制表符的文本后导出 TSV。",
+      "expected": "生成与导出返回 HTTP 200；生成 3 张；script 标签已转义；TSV 解析为 3 行，首行有 3 列。",
+      "status": "通过",
+      "seconds": 0.088,
+      "node": "tests.test_cards::test_card_export_tsv",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-006",
+      "module": "记忆卡片",
+      "title": "APKG 文件结构、去重与稳定 GUID",
+      "input": "生成卡片，将同一组卡片重复拼接后连续导出两次 APKG，检查 ZIP 与内嵌 SQLite。",
+      "expected": "两次导出均 HTTP 200；ZIP 校验通过且仅含 collection.anki2、media；各含 3 条 notes 和 3 条 cards；GUID 一致；临时导出目录为空。",
+      "status": "通过",
+      "seconds": 0.324,
+      "node": "tests.test_cards::test_apkg_contains_valid_notes_and_stable_guids",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-007",
+      "module": "卡片证据导出",
+      "title": "test_tsv_preserves_optional_evidence_with_html_escaping",
+      "input": "详见测试源码 参数 False]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.042,
+      "node": "tests.test_cards_evidence_export::test_tsv_preserves_optional_evidence_with_html_escaping[False]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-008",
+      "module": "卡片证据导出",
+      "title": "test_tsv_preserves_optional_evidence_with_html_escaping",
+      "input": "详见测试源码 参数 True]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.04,
+      "node": "tests.test_cards_evidence_export::test_tsv_preserves_optional_evidence_with_html_escaping[True]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-009",
+      "module": "卡片证据导出",
+      "title": "test_apkg_preserves_optional_evidence_in_compatible_source_field",
+      "input": "详见测试源码 参数 False]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.159,
+      "node": "tests.test_cards_evidence_export::test_apkg_preserves_optional_evidence_in_compatible_source_field[False]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-010",
+      "module": "卡片证据导出",
+      "title": "test_apkg_preserves_optional_evidence_in_compatible_source_field",
+      "input": "详见测试源码 参数 True]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.159,
+      "node": "tests.test_cards_evidence_export::test_apkg_preserves_optional_evidence_in_compatible_source_field[True]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-011",
+      "module": "制卡模型",
+      "title": "test_model_generates_concept_cards_with_verified_original_evidence",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_cards_ollama::test_model_generates_concept_cards_with_verified_original_evidence",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-012",
+      "module": "制卡模型",
+      "title": "test_cards_reject_fabricated_or_stitched_evidence",
+      "input": "详见测试源码 参数 \\u4e3b\\u52a8\\u56de\\u5fc6\\u4fdd\\u8bc1\\u6c38\\u8fdc\\u4e0d\\u4f1a\\u9057\\u5fd8\\u3002]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_cards_ollama::test_cards_reject_fabricated_or_stitched_evidence[\\u4e3b\\u52a8\\u56de\\u5fc6\\u4fdd\\u8bc1\\u6c38\\u8fdc\\u4e0d\\u4f1a\\u9057\\u5fd8\\u3002]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-013",
+      "module": "制卡模型",
+      "title": "test_cards_reject_fabricated_or_stitched_evidence",
+      "input": "详见测试源码 参数 \\u4e3b\\u52a8\\u56de\\u5fc6\\u662f\\u5408\\u4e0a\\u4e66\\u2026\\u53d1\\u73b0\\u7406\\u89e3\\u7f3a\\u53e3\\u3002]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.0,
+      "node": "tests.test_cards_ollama::test_cards_reject_fabricated_or_stitched_evidence[\\u4e3b\\u52a8\\u56de\\u5fc6\\u662f\\u5408\\u4e0a\\u4e66\\u2026\\u53d1\\u73b0\\u7406\\u89e3\\u7f3a\\u53e3\\u3002]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-014",
+      "module": "制卡模型",
+      "title": "test_cards_reject_excess_count_or_duplicate_questions",
+      "input": "详见测试源码 参数 1]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_cards_ollama::test_cards_reject_excess_count_or_duplicate_questions[1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-015",
+      "module": "制卡模型",
+      "title": "test_cards_reject_excess_count_or_duplicate_questions",
+      "input": "详见测试源码 参数 2]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.0,
+      "node": "tests.test_cards_ollama::test_cards_reject_excess_count_or_duplicate_questions[2]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-016",
+      "module": "制卡模型",
+      "title": "test_insufficient_material_may_produce_zero_cards",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.0,
+      "node": "tests.test_cards_ollama::test_insufficient_material_may_produce_zero_cards",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-017",
+      "module": "制卡模型",
+      "title": "test_cards_source_identifiers_cannot_be_model_generated",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.0,
+      "node": "tests.test_cards_ollama::test_cards_source_identifiers_cannot_be_model_generated",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-018",
+      "module": "制卡模型",
+      "title": "test_cards_offline_default_retains_template_and_source",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.0,
+      "node": "tests.test_cards_ollama::test_cards_offline_default_retains_template_and_source",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-019",
+      "module": "制卡模型",
+      "title": "test_cards_model_errors_propagate_without_template_fallback",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.0,
+      "node": "tests.test_cards_ollama::test_cards_model_errors_propagate_without_template_fallback",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-020",
+      "module": "制卡模型",
+      "title": "test_cards_missing_source_does_not_call_model",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.0,
+      "node": "tests.test_cards_ollama::test_cards_missing_source_does_not_call_model",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-021",
+      "module": "正式入口",
+      "title": "拒绝非法端口（3 组参数）",
+      "input": "解析命令行 --port 0。",
+      "expected": "每组均触发 SystemExit，退出码为 2。",
+      "status": "通过",
+      "seconds": 0.002,
+      "node": "tests.test_entry::test_entry_rejects_invalid_ports[0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-022",
+      "module": "正式入口",
+      "title": "拒绝非法端口（3 组参数）",
+      "input": "解析命令行 --port 65536。",
+      "expected": "每组均触发 SystemExit，退出码为 2。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_entry::test_entry_rejects_invalid_ports[65536]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-023",
+      "module": "正式入口",
+      "title": "拒绝非法端口（3 组参数）",
+      "input": "解析命令行 --port not-a-port。",
+      "expected": "每组均触发 SystemExit，退出码为 2。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_entry::test_entry_rejects_invalid_ports[not-a-port]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-024",
+      "module": "正式入口",
+      "title": "跨目录执行环境检查且不创建数据目录",
+      "input": "在临时目录启动独立 Python 子进程执行 main.py --check，使用临时数据路径与 extractive 模式。",
+      "expected": "退出码为 0；JSON 中 ready=true、项目根目录正确、依赖名称集合完整；指定数据目录未创建。",
+      "status": "通过",
+      "seconds": 0.764,
+      "node": "tests.test_entry::test_check_from_another_directory_does_not_create_database",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-025",
+      "module": "正式入口",
+      "title": "缺少依赖时提供明确检查错误",
+      "input": "通过 monkeypatch 模拟导入 genanki 时出现 ModuleNotFoundError，然后运行环境检查。",
+      "expected": "ready=false，错误列表含 Dependency unavailable: genanki。",
+      "status": "通过",
+      "seconds": 0.042,
+      "node": "tests.test_entry::test_check_reports_missing_dependency",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-026",
+      "module": "正式入口",
+      "title": "检查入口拒绝不支持的模型提供方",
+      "input": "设置 ZHIJING_MODEL_PROVIDER=unsupported，再调用 CLI 的 --check。",
+      "expected": "CLI 返回 2；输出 JSON 的首条错误包含 ZHIJING_MODEL_PROVIDER。",
+      "status": "通过",
+      "seconds": 0.01,
+      "node": "tests.test_entry::test_check_rejects_invalid_model_provider",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-027",
+      "module": "正式入口",
+      "title": "相对数据路径以项目根目录为基准",
+      "input": "工作目录切到临时目录，设置 ZHIJING_DATA_DIR=local-data 后运行环境检查。",
+      "expected": "报告的数据路径等于项目根目录/local-data；临时工作目录下未创建 local-data。",
+      "status": "通过",
+      "seconds": 0.014,
+      "node": "tests.test_entry::test_relative_data_path_is_anchored_to_project",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-028",
+      "module": "正式入口（模拟）",
+      "title": "启动参数正确传给 Uvicorn",
+      "input": "以 FakeServer 替换 uvicorn.Server，在 extractive 模式调用 CLI --port 8765。",
+      "expected": "CLI 返回 0；服务配置为 127.0.0.1:8765、factory=true、应用 zhijing.app:create_app。此案例不监听真实端口。",
+      "status": "通过",
+      "seconds": 0.011,
+      "node": "tests.test_entry::test_server_uses_requested_port_and_loopback",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-029",
+      "module": "正式入口（模拟）",
+      "title": "启动预检失败时返回错误退出码",
+      "input": "模拟环境检查返回 ready=false 与 Missing dependency，再调用默认 CLI。",
+      "expected": "CLI 返回 2，标准错误输出包含 Missing dependency。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_entry::test_failed_preflight_does_not_start_server",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-030",
+      "module": "正式入口（模拟）",
+      "title": "文档打开时机（3 组参数）",
+      "input": "模拟 server.started=false、健康响应 status=ok；预期不打开浏览器。",
+      "expected": "前两组均不记录浏览器打开操作；第三组仅记录 http://127.0.0.1:8765/docs。此案例不实际打开浏览器。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_entry::test_browser_waits_for_own_healthy_server[False-ok-expected0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-031",
+      "module": "正式入口（模拟）",
+      "title": "文档打开时机（3 组参数）",
+      "input": "模拟 server.started=true、健康响应 status=failed；预期不打开浏览器。",
+      "expected": "前两组均不记录浏览器打开操作；第三组仅记录 http://127.0.0.1:8765/docs。此案例不实际打开浏览器。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_entry::test_browser_waits_for_own_healthy_server[True-failed-expected1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-032",
+      "module": "正式入口（模拟）",
+      "title": "文档打开时机（3 组参数）",
+      "input": "模拟 server.started=true、健康响应 status=ok；预期仅打开一次 /docs。",
+      "expected": "前两组均不记录浏览器打开操作；第三组仅记录 http://127.0.0.1:8765/docs。此案例不实际打开浏览器。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_entry::test_browser_waits_for_own_healthy_server[True-ok-expected2]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-033",
+      "module": "事实证据审查",
+      "title": "区分语料提及、相关证据与证据不足",
+      "input": "提交主动回忆定义、“主动回忆完全没有效果。”与无关字符串 zyxwv987654。",
+      "expected": "依次返回 mentioned_in_corpus、related_evidence、insufficient_evidence；首条说明含“尚未验证真实性”。",
+      "status": "通过",
+      "seconds": 0.104,
+      "node": "tests.test_facts_companion::test_fact_review_never_equates_mention_with_truth",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-034",
+      "module": "组合任务",
+      "title": "四项功能联动与事实审查排除当前资料",
+      "input": "以第一条资料执行 reading、cards、facts、author，提交问题“主动回忆”及一条明确声明。",
+      "expected": "返回 HTTP 200；拆解段落与卡片非空；答主首条引用为当前资料；事实证据非空且不引用当前资料。",
+      "status": "通过",
+      "seconds": 0.103,
+      "node": "tests.test_facts_companion::test_companion_integrates_all_features_and_excludes_self",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-035",
+      "module": "组合任务",
+      "title": "事实审查任务要求显式声明",
+      "input": "指定资料并执行 facts 任务，省略 claims。",
+      "expected": "返回 HTTP 422。",
+      "status": "通过",
+      "seconds": 0.089,
+      "node": "tests.test_facts_companion::test_companion_requires_explicit_claims",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-036",
+      "module": "服务基础",
+      "title": "健康检查与接口文档注册",
+      "input": "GET /health 与 GET /openapi.json。",
+      "expected": "健康检查 status=ok；OpenAPI 路径包含 /api/v1/companion/run。",
+      "status": "通过",
+      "seconds": 0.118,
+      "node": "tests.test_facts_companion::test_health_and_openapi",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-037",
+      "module": "审查模型",
+      "title": "test_semantic_review_uses_real_citations",
+      "input": "详见测试源码 参数 supported-ids0-relations0-supported_by_evidence]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.081,
+      "node": "tests.test_facts_ollama::test_semantic_review_uses_real_citations[supported-ids0-relations0-supported_by_evidence]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-038",
+      "module": "审查模型",
+      "title": "test_semantic_review_uses_real_citations",
+      "input": "详见测试源码 参数 refuted-ids1-relations1-refuted_by_evidence]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.081,
+      "node": "tests.test_facts_ollama::test_semantic_review_uses_real_citations[refuted-ids1-relations1-refuted_by_evidence]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-039",
+      "module": "审查模型",
+      "title": "test_semantic_review_uses_real_citations",
+      "input": "详见测试源码 参数 mixed-ids2-relations2-mixed_evidence]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.082,
+      "node": "tests.test_facts_ollama::test_semantic_review_uses_real_citations[mixed-ids2-relations2-mixed_evidence]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-040",
+      "module": "审查模型",
+      "title": "test_semantic_review_uses_real_citations",
+      "input": "详见测试源码 参数 insufficient-ids3-relations3-insufficient_evidence]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.084,
+      "node": "tests.test_facts_ollama::test_semantic_review_uses_real_citations[insufficient-ids3-relations3-insufficient_evidence]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-041",
+      "module": "审查模型",
+      "title": "test_invalid_citation_or_inconsistent_verdict_is_rejected",
+      "input": "详见测试源码 参数 response0]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.076,
+      "node": "tests.test_facts_ollama::test_invalid_citation_or_inconsistent_verdict_is_rejected[response0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-042",
+      "module": "审查模型",
+      "title": "test_invalid_citation_or_inconsistent_verdict_is_rejected",
+      "input": "详见测试源码 参数 response1]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.079,
+      "node": "tests.test_facts_ollama::test_invalid_citation_or_inconsistent_verdict_is_rejected[response1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-043",
+      "module": "审查模型",
+      "title": "test_invalid_citation_or_inconsistent_verdict_is_rejected",
+      "input": "详见测试源码 参数 response2]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.079,
+      "node": "tests.test_facts_ollama::test_invalid_citation_or_inconsistent_verdict_is_rejected[response2]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-044",
+      "module": "审查模型",
+      "title": "test_invalid_citation_or_inconsistent_verdict_is_rejected",
+      "input": "详见测试源码 参数 response3]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.079,
+      "node": "tests.test_facts_ollama::test_invalid_citation_or_inconsistent_verdict_is_rejected[response3]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-045",
+      "module": "审查模型",
+      "title": "test_invalid_citation_or_inconsistent_verdict_is_rejected",
+      "input": "详见测试源码 参数 response4]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.076,
+      "node": "tests.test_facts_ollama::test_invalid_citation_or_inconsistent_verdict_is_rejected[response4]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-046",
+      "module": "审查模型",
+      "title": "test_excluded_and_other_authors_never_reach_model",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.079,
+      "node": "tests.test_facts_ollama::test_excluded_and_other_authors_never_reach_model",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-047",
+      "module": "审查模型",
+      "title": "test_no_evidence_does_not_call_model",
+      "input": "详见测试源码 参数 nobody-\\u4e3b\\u52a8\\u56de\\u5fc6]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.082,
+      "node": "tests.test_facts_ollama::test_no_evidence_does_not_call_model[nobody-\\u4e3b\\u52a8\\u56de\\u5fc6]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-048",
+      "module": "审查模型",
+      "title": "test_no_evidence_does_not_call_model",
+      "input": "详见测试源码 参数 alice-xyz987654]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.079,
+      "node": "tests.test_facts_ollama::test_no_evidence_does_not_call_model[alice-xyz987654]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-049",
+      "module": "知识模型",
+      "title": "test_model_graph_has_traceable_concepts_and_relations",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.085,
+      "node": "tests.test_knowledge_ollama::test_model_graph_has_traceable_concepts_and_relations",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-050",
+      "module": "知识模型",
+      "title": "test_invalid_graph_is_rejected",
+      "input": "详见测试源码 参数 node_evidence]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.076,
+      "node": "tests.test_knowledge_ollama::test_invalid_graph_is_rejected[node_evidence]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-051",
+      "module": "知识模型",
+      "title": "test_invalid_graph_is_rejected",
+      "input": "详见测试源码 参数 edge_evidence]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.077,
+      "node": "tests.test_knowledge_ollama::test_invalid_graph_is_rejected[edge_evidence]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-052",
+      "module": "知识模型",
+      "title": "test_invalid_graph_is_rejected",
+      "input": "详见测试源码 参数 dangling]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.076,
+      "node": "tests.test_knowledge_ollama::test_invalid_graph_is_rejected[dangling]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-053",
+      "module": "知识模型",
+      "title": "test_invalid_graph_is_rejected",
+      "input": "详见测试源码 参数 self_edge]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.081,
+      "node": "tests.test_knowledge_ollama::test_invalid_graph_is_rejected[self_edge]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-054",
+      "module": "知识模型",
+      "title": "test_invalid_graph_is_rejected",
+      "input": "详见测试源码 参数 node_duplicate]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.078,
+      "node": "tests.test_knowledge_ollama::test_invalid_graph_is_rejected[node_duplicate]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-055",
+      "module": "知识模型",
+      "title": "test_invalid_graph_is_rejected",
+      "input": "详见测试源码 参数 edge_duplicate]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.074,
+      "node": "tests.test_knowledge_ollama::test_invalid_graph_is_rejected[edge_duplicate]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-056",
+      "module": "知识模型",
+      "title": "test_invalid_graph_is_rejected",
+      "input": "详见测试源码 参数 evidence_duplicate]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.074,
+      "node": "tests.test_knowledge_ollama::test_invalid_graph_is_rejected[evidence_duplicate]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-057",
+      "module": "知识模型",
+      "title": "test_empty_library_does_not_call_model",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.075,
+      "node": "tests.test_knowledge_ollama::test_empty_library_does_not_call_model",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-058",
+      "module": "知识模型",
+      "title": "test_source_limit_is_explicit_and_selected_text_is_complete",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.079,
+      "node": "tests.test_knowledge_ollama::test_source_limit_is_explicit_and_selected_text_is_complete",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-059",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates0]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-060",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates1]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-061",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates2]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates2]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-062",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates3]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates3]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-063",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates4]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates4]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-064",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates5]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates5]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-065",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates6]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.004,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates6]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-066",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates7]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates7]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-067",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates8]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates8]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-068",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates9]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates9]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-069",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates10]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates10]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-070",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates11]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.004,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates11]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-071",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates12]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates12]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-072",
+      "module": "模型配置",
+      "title": "test_bad_config_rejected_before_creating_database",
+      "input": "详见测试源码 参数 updates13]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.003,
+      "node": "tests.test_model_settings::test_bad_config_rejected_before_creating_database[updates13]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-073",
+      "module": "模型配置",
+      "title": "test_key_not_in_settings_repr_or_preflight",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.011,
+      "node": "tests.test_model_settings::test_key_not_in_settings_repr_or_preflight",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-074",
+      "module": "模型配置",
+      "title": "test_non_numeric_config_gives_actionable_preflight",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.011,
+      "node": "tests.test_model_settings::test_non_numeric_config_gives_actionable_preflight",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-075",
+      "module": "Ollama 适配器（模拟）",
+      "title": "MockTransport 验证请求证据与响应模式",
+      "input": "使用 httpx.MockTransport 模拟 Ollama；传入一条摘录“资料原文”，模拟返回有效回答。",
+      "expected": "请求 stream=false，提示词中首条证据文本为“资料原文”；返回 mode=ollama。此案例不连接真实模型。",
+      "status": "通过",
+      "seconds": 0.002,
+      "node": "tests.test_ollama::test_ollama_sends_only_supplied_evidence",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-076",
+      "module": "Ollama 适配器（模拟）",
+      "title": "MockTransport 验证模型失败转换（4 组参数）",
+      "input": "MockTransport 模拟 HTTP 500，响应体 {}。",
+      "expected": "每组均抛出 DomainError，状态为 502。此案例不连接真实模型。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama::test_model_failures_are_explicit[500-payload0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-077",
+      "module": "Ollama 适配器（模拟）",
+      "title": "MockTransport 验证模型失败转换（4 组参数）",
+      "input": "MockTransport 模拟 HTTP 200，响应体 {}，缺少 response。",
+      "expected": "每组均抛出 DomainError，状态为 502。此案例不连接真实模型。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama::test_model_failures_are_explicit[200-payload1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-078",
+      "module": "Ollama 适配器（模拟）",
+      "title": "MockTransport 验证模型失败转换（4 组参数）",
+      "input": "MockTransport 模拟 HTTP 200，response 为一个空格。",
+      "expected": "每组均抛出 DomainError，状态为 502。此案例不连接真实模型。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama::test_model_failures_are_explicit[200-payload2]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-079",
+      "module": "Ollama 适配器（模拟）",
+      "title": "MockTransport 验证模型失败转换（4 组参数）",
+      "input": "MockTransport 模拟 HTTP 200，response 为 []。",
+      "expected": "每组均抛出 DomainError，状态为 502。此案例不连接真实模型。",
+      "status": "通过",
+      "seconds": 0.002,
+      "node": "tests.test_ollama::test_model_failures_are_explicit[200-payload3]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-080",
+      "module": "五功能模型集成",
+      "title": "test_each_capability_reaches_ollama_over_http",
+      "input": "详见测试源码 参数 reading]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.078,
+      "node": "tests.test_ollama_integration::test_each_capability_reaches_ollama_over_http[reading]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-081",
+      "module": "五功能模型集成",
+      "title": "test_each_capability_reaches_ollama_over_http",
+      "input": "详见测试源码 参数 cards]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.079,
+      "node": "tests.test_ollama_integration::test_each_capability_reaches_ollama_over_http[cards]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-082",
+      "module": "五功能模型集成",
+      "title": "test_each_capability_reaches_ollama_over_http",
+      "input": "详见测试源码 参数 facts]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.094,
+      "node": "tests.test_ollama_integration::test_each_capability_reaches_ollama_over_http[facts]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-083",
+      "module": "五功能模型集成",
+      "title": "test_each_capability_reaches_ollama_over_http",
+      "input": "详见测试源码 参数 knowledge]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.082,
+      "node": "tests.test_ollama_integration::test_each_capability_reaches_ollama_over_http[knowledge]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-084",
+      "module": "五功能模型集成",
+      "title": "test_each_capability_reaches_ollama_over_http",
+      "input": "详见测试源码 参数 author]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.082,
+      "node": "tests.test_ollama_integration::test_each_capability_reaches_ollama_over_http[author]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-085",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 http-reading]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.076,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[http-reading]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-086",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 http-cards]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.08,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[http-cards]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-087",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 http-facts]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.082,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[http-facts]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-088",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 http-knowledge]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.078,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[http-knowledge]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-089",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 http-author]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.081,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[http-author]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-090",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_json-reading]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.077,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_json-reading]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-091",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_json-cards]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.08,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_json-cards]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-092",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_json-facts]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.079,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_json-facts]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-093",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_json-knowledge]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.076,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_json-knowledge]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-094",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_json-author]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.077,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_json-author]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-095",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_reference-reading]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.114,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_reference-reading]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-096",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_reference-cards]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.075,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_reference-cards]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-097",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_reference-facts]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.081,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_reference-facts]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-098",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_reference-knowledge]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.076,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_reference-knowledge]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-099",
+      "module": "五功能模型集成",
+      "title": "test_model_failures_return_502_without_silent_rule_fallback",
+      "input": "详见测试源码 参数 invalid_reference-author]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.078,
+      "node": "tests.test_ollama_integration::test_model_failures_return_502_without_silent_rule_fallback[invalid_reference-author]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-100",
+      "module": "五功能模型集成",
+      "title": "test_reading_preserves_every_character_despite_reordered_model_sections",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.075,
+      "node": "tests.test_ollama_integration::test_reading_preserves_every_character_despite_reordered_model_sections",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-101",
+      "module": "五功能模型集成",
+      "title": "test_companion_uses_same_model_and_never_reviews_with_its_own_source",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.1,
+      "node": "tests.test_ollama_integration::test_companion_uses_same_model_and_never_reviews_with_its_own_source",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-102",
+      "module": "五功能模型集成",
+      "title": "test_grounded_model_cards_still_export_to_anki",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.201,
+      "node": "tests.test_ollama_integration::test_grounded_model_cards_still_export_to_anki",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-103",
+      "module": "五功能模型集成",
+      "title": "test_live_report_separates_partial_api_success_from_all_checks",
+      "input": "详见测试源码 参数 0-False]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.008,
+      "node": "tests.test_ollama_integration::test_live_report_separates_partial_api_success_from_all_checks[0-False]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-104",
+      "module": "五功能模型集成",
+      "title": "test_live_report_separates_partial_api_success_from_all_checks",
+      "input": "详见测试源码 参数 1-False]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.006,
+      "node": "tests.test_ollama_integration::test_live_report_separates_partial_api_success_from_all_checks[1-False]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-105",
+      "module": "五功能模型集成",
+      "title": "test_live_report_separates_partial_api_success_from_all_checks",
+      "input": "详见测试源码 参数 5-False]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.007,
+      "node": "tests.test_ollama_integration::test_live_report_separates_partial_api_success_from_all_checks[5-False]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-106",
+      "module": "五功能模型集成",
+      "title": "test_live_report_separates_partial_api_success_from_all_checks",
+      "input": "详见测试源码 参数 1-True]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.007,
+      "node": "tests.test_ollama_integration::test_live_report_separates_partial_api_success_from_all_checks[1-True]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-107",
+      "module": "模型HTTP边界",
+      "title": "test_structured_request_paths_formats_and_auth",
+      "input": "详见测试源码 参数 schema-http://local]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.002,
+      "node": "tests.test_ollama_transport::test_structured_request_paths_formats_and_auth[schema-http://local]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-108",
+      "module": "模型HTTP边界",
+      "title": "test_structured_request_paths_formats_and_auth",
+      "input": "详见测试源码 参数 schema-http://local/api]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.002,
+      "node": "tests.test_ollama_transport::test_structured_request_paths_formats_and_auth[schema-http://local/api]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-109",
+      "module": "模型HTTP边界",
+      "title": "test_structured_request_paths_formats_and_auth",
+      "input": "详见测试源码 参数 schema-http://local/proxy/api]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_structured_request_paths_formats_and_auth[schema-http://local/proxy/api]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-110",
+      "module": "模型HTTP边界",
+      "title": "test_structured_request_paths_formats_and_auth",
+      "input": "详见测试源码 参数 json-http://local]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_structured_request_paths_formats_and_auth[json-http://local]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-111",
+      "module": "模型HTTP边界",
+      "title": "test_structured_request_paths_formats_and_auth",
+      "input": "详见测试源码 参数 json-http://local/api]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_structured_request_paths_formats_and_auth[json-http://local/api]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-112",
+      "module": "模型HTTP边界",
+      "title": "test_structured_request_paths_formats_and_auth",
+      "input": "详见测试源码 参数 json-http://local/proxy/api]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.002,
+      "node": "tests.test_ollama_transport::test_structured_request_paths_formats_and_auth[json-http://local/proxy/api]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-113",
+      "module": "模型HTTP边界",
+      "title": "test_structured_request_paths_formats_and_auth",
+      "input": "详见测试源码 参数 prompt-http://local]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_structured_request_paths_formats_and_auth[prompt-http://local]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-114",
+      "module": "模型HTTP边界",
+      "title": "test_structured_request_paths_formats_and_auth",
+      "input": "详见测试源码 参数 prompt-http://local/api]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.002,
+      "node": "tests.test_ollama_transport::test_structured_request_paths_formats_and_auth[prompt-http://local/api]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-115",
+      "module": "模型HTTP边界",
+      "title": "test_structured_request_paths_formats_and_auth",
+      "input": "详见测试源码 参数 prompt-http://local/proxy/api]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_structured_request_paths_formats_and_auth[prompt-http://local/proxy/api]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-116",
+      "module": "模型HTTP边界",
+      "title": "test_invalid_or_truncated_responses_are_not_downgraded",
+      "input": "详见测试源码 参数 envelope0]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_invalid_or_truncated_responses_are_not_downgraded[envelope0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-117",
+      "module": "模型HTTP边界",
+      "title": "test_invalid_or_truncated_responses_are_not_downgraded",
+      "input": "详见测试源码 参数 envelope1]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_invalid_or_truncated_responses_are_not_downgraded[envelope1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-118",
+      "module": "模型HTTP边界",
+      "title": "test_invalid_or_truncated_responses_are_not_downgraded",
+      "input": "详见测试源码 参数 envelope2]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_invalid_or_truncated_responses_are_not_downgraded[envelope2]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-119",
+      "module": "模型HTTP边界",
+      "title": "test_invalid_or_truncated_responses_are_not_downgraded",
+      "input": "详见测试源码 参数 envelope3]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_invalid_or_truncated_responses_are_not_downgraded[envelope3]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-120",
+      "module": "模型HTTP边界",
+      "title": "test_invalid_or_truncated_responses_are_not_downgraded",
+      "input": "详见测试源码 参数 envelope4]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_invalid_or_truncated_responses_are_not_downgraded[envelope4]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-121",
+      "module": "模型HTTP边界",
+      "title": "test_invalid_or_truncated_responses_are_not_downgraded",
+      "input": "详见测试源码 参数 envelope5]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_invalid_or_truncated_responses_are_not_downgraded[envelope5]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-122",
+      "module": "模型HTTP边界",
+      "title": "test_invalid_or_truncated_responses_are_not_downgraded",
+      "input": "详见测试源码 参数 envelope6]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_invalid_or_truncated_responses_are_not_downgraded[envelope6]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-123",
+      "module": "模型HTTP边界",
+      "title": "test_invalid_or_truncated_responses_are_not_downgraded",
+      "input": "详见测试源码 参数 envelope7]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.002,
+      "node": "tests.test_ollama_transport::test_invalid_or_truncated_responses_are_not_downgraded[envelope7]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-124",
+      "module": "模型HTTP边界",
+      "title": "test_input_budget_rejects_before_sending_or_truncating",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_input_budget_rejects_before_sending_or_truncating",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-125",
+      "module": "模型HTTP边界",
+      "title": "test_budget_includes_system_text_and_conservative_token_reserve",
+      "input": "详见测试源码 参数 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-payload0-options0]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_budget_includes_system_text_and_conservative_token_reserve[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-payload0-options0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-126",
+      "module": "模型HTTP边界",
+      "title": "test_budget_includes_system_text_and_conservative_token_reserve",
+      "input": "详见测试源码 参数 -payload1-options1]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_budget_includes_system_text_and_conservative_token_reserve[-payload1-options1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-127",
+      "module": "模型HTTP边界",
+      "title": "test_upstream_errors_do_not_expose_provider_body",
+      "input": "详见测试源码 参数 401]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_upstream_errors_do_not_expose_provider_body[401]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-128",
+      "module": "模型HTTP边界",
+      "title": "test_upstream_errors_do_not_expose_provider_body",
+      "input": "详见测试源码 参数 403]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_upstream_errors_do_not_expose_provider_body[403]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-129",
+      "module": "模型HTTP边界",
+      "title": "test_upstream_errors_do_not_expose_provider_body",
+      "input": "详见测试源码 参数 404]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_upstream_errors_do_not_expose_provider_body[404]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-130",
+      "module": "模型HTTP边界",
+      "title": "test_upstream_errors_do_not_expose_provider_body",
+      "input": "详见测试源码 参数 429]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_upstream_errors_do_not_expose_provider_body[429]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-131",
+      "module": "模型HTTP边界",
+      "title": "test_upstream_errors_do_not_expose_provider_body",
+      "input": "详见测试源码 参数 500]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_upstream_errors_do_not_expose_provider_body[500]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-132",
+      "module": "模型HTTP边界",
+      "title": "test_timeout_is_explicit_and_not_retried",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_timeout_is_explicit_and_not_retried",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-133",
+      "module": "模型HTTP边界",
+      "title": "test_author_rejects_untraceable_or_mismatched_references",
+      "input": "详见测试源码 参数 wrong [2]-citations0]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_author_rejects_untraceable_or_mismatched_references[wrong [2]-citations0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-134",
+      "module": "模型HTTP边界",
+      "title": "test_author_rejects_untraceable_or_mismatched_references",
+      "input": "详见测试源码 参数 mismatch [1]-citations1]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_author_rejects_untraceable_or_mismatched_references[mismatch [1]-citations1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-135",
+      "module": "模型HTTP边界",
+      "title": "test_author_rejects_untraceable_or_mismatched_references",
+      "input": "详见测试源码 参数 missing marker-citations2]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_author_rejects_untraceable_or_mismatched_references[missing marker-citations2]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-136",
+      "module": "模型HTTP边界",
+      "title": "test_author_rejects_untraceable_or_mismatched_references",
+      "input": "详见测试源码 参数 extra [1][3]-citations3]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_ollama_transport::test_author_rejects_untraceable_or_mismatched_references[extra [1][3]-citations3]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-137",
+      "module": "长文模型",
+      "title": "test_reading_model_enriches_without_rewriting_or_reordering_original",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_reader_ollama::test_reading_model_enriches_without_rewriting_or_reordering_original",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-138",
+      "module": "长文模型",
+      "title": "test_reading_rejects_missing_duplicate_or_invented_indices",
+      "input": "详见测试源码 参数 indices0]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_reader_ollama::test_reading_rejects_missing_duplicate_or_invented_indices[indices0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-139",
+      "module": "长文模型",
+      "title": "test_reading_rejects_missing_duplicate_or_invented_indices",
+      "input": "详见测试源码 参数 indices1]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_reader_ollama::test_reading_rejects_missing_duplicate_or_invented_indices[indices1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-140",
+      "module": "长文模型",
+      "title": "test_reading_rejects_missing_duplicate_or_invented_indices",
+      "input": "详见测试源码 参数 indices2]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_reader_ollama::test_reading_rejects_missing_duplicate_or_invented_indices[indices2]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-141",
+      "module": "长文模型",
+      "title": "test_reading_uses_repository_original_and_preserves_source_id",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_reader_ollama::test_reading_uses_repository_original_and_preserves_source_id",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-142",
+      "module": "长文模型",
+      "title": "test_reading_offline_mode_still_preserves_original",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_reader_ollama::test_reading_offline_mode_still_preserves_original",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-143",
+      "module": "长文模型",
+      "title": "test_reading_model_failures_are_not_silently_downgraded",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.0,
+      "node": "tests.test_reader_ollama::test_reading_model_failures_are_not_silently_downgraded",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-144",
+      "module": "长文模型",
+      "title": "test_reading_schema_rejects_rewritten_text_and_noninteger_indices",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.0,
+      "node": "tests.test_reader_ollama::test_reading_schema_rejects_rewritten_text_and_noninteger_indices",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-145",
+      "module": "长文模型",
+      "title": "test_reading_missing_source_does_not_call_model",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_reader_ollama::test_reading_missing_source_does_not_call_model",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-146",
+      "module": "长文拆解",
+      "title": "无标点长文本按上限拆分",
+      "input": "将“长”重复 4100 次，调用 chunks，块大小上限设为 600。",
+      "expected": "拼接全部分块与原文完全一致；最大块长度不超过 600。",
+      "status": "通过",
+      "seconds": 0.001,
+      "node": "tests.test_reading_knowledge::test_long_unpunctuated_text_is_bounded",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-147",
+      "module": "长文拆解",
+      "title": "拆解接口保留全文且控制段落长度",
+      "input": "分析第一条导入资料，chunk_size=100。",
+      "expected": "返回 HTTP 200、extractive 模式；分段拼接等于原文，每段不超过 100 字符。",
+      "status": "通过",
+      "seconds": 0.095,
+      "node": "tests.test_reading_knowledge::test_reader_preserves_content",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-148",
+      "module": "长文拆解",
+      "title": "拆解参数约束（4 组参数）",
+      "input": "POST /api/v1/reading/analyze，请求体为 {}。",
+      "expected": "每组请求均返回 HTTP 422。",
+      "status": "通过",
+      "seconds": 0.047,
+      "node": "tests.test_reading_knowledge::test_reader_input_contract[body0]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-149",
+      "module": "长文拆解",
+      "title": "拆解参数约束（4 组参数）",
+      "input": "请求体为 {text: x, source_id: x}，同时提供两个输入。",
+      "expected": "每组请求均返回 HTTP 422。",
+      "status": "通过",
+      "seconds": 0.044,
+      "node": "tests.test_reading_knowledge::test_reader_input_contract[body1]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-150",
+      "module": "长文拆解",
+      "title": "拆解参数约束（4 组参数）",
+      "input": "请求体仅有 text，值为两个空格。",
+      "expected": "每组请求均返回 HTTP 422。",
+      "status": "通过",
+      "seconds": 0.043,
+      "node": "tests.test_reading_knowledge::test_reader_input_contract[body2]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-151",
+      "module": "长文拆解",
+      "title": "拆解参数约束（4 组参数）",
+      "input": "请求体为 {text: a, chunk_size: 0}。",
+      "expected": "每组请求均返回 HTTP 422。",
+      "status": "通过",
+      "seconds": 0.043,
+      "node": "tests.test_reading_knowledge::test_reader_input_contract[body3]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-152",
+      "module": "知识地图",
+      "title": "图节点、连边与截断元数据",
+      "input": "导入样例后获取知识地图，再以 limit=1 获取地图。",
+      "expected": "节点 ID 唯一；连边两端均指向现有节点；回答节点共 3 个；限量结果 truncated=true、total_sources=3。",
+      "status": "通过",
+      "seconds": 0.094,
+      "node": "tests.test_reading_knowledge::test_xyflow_graph_has_valid_edges",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-153",
+      "module": "资料管理",
+      "title": "重复导入与重建应用后的持久化",
+      "input": "同一组样例资料连续导入两次，再用同一数据目录创建新应用。",
+      "expected": "两次导入结果相同；新应用列出 3 条资料，并可按 ID 取回与首次结果相同的第一条资料。",
+      "status": "通过",
+      "seconds": 0.121,
+      "node": "tests.test_sources::test_import_is_idempotent_and_persistent",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-154",
+      "module": "资料管理",
+      "title": "答主筛选与分页",
+      "input": "查询答主 demo-author-1；另以 offset=2、limit=1 查询资料。",
+      "expected": "答主筛选返回 2 条且作者均匹配；分页查询返回 1 条。",
+      "status": "通过",
+      "seconds": 0.092,
+      "node": "tests.test_sources::test_author_filter_and_pagination",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-155",
+      "module": "资料管理",
+      "title": "非法资料导入拒绝（3 组参数）",
+      "input": "首条资料 text 设置为两个空格，其余字段保留。",
+      "expected": "每组均返回 HTTP 422，资料列表保持为空。",
+      "status": "通过",
+      "seconds": 0.048,
+      "node": "tests.test_sources::test_invalid_import[text-  ]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-156",
+      "module": "资料管理",
+      "title": "非法资料导入拒绝（3 组参数）",
+      "input": "首条资料 url 设置为 file:///etc/passwd，其余字段保留。",
+      "expected": "每组均返回 HTTP 422，资料列表保持为空。",
+      "status": "通过",
+      "seconds": 0.048,
+      "node": "tests.test_sources::test_invalid_import[url-file:///etc/passwd]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-157",
+      "module": "资料管理",
+      "title": "非法资料导入拒绝（3 组参数）",
+      "input": "首条资料 title 设置为空字符串，其余字段保留。",
+      "expected": "每组均返回 HTTP 422，资料列表保持为空。",
+      "status": "通过",
+      "seconds": 0.045,
+      "node": "tests.test_sources::test_invalid_import[title-]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-158",
+      "module": "资料管理",
+      "title": "不存在的资料返回明确错误",
+      "input": "GET /api/v1/sources/missing。",
+      "expected": "返回 HTTP 404，业务错误码为 source_not_found。",
+      "status": "通过",
+      "seconds": 0.045,
+      "node": "tests.test_sources::test_missing_source",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-159",
+      "module": "原文保留",
+      "title": "test_direct_reading_keeps_leading_and_trailing_whitespace",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.044,
+      "node": "tests.test_text_fidelity::test_direct_reading_keeps_leading_and_trailing_whitespace",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-160",
+      "module": "原文保留",
+      "title": "test_source_import_and_source_reading_keep_original_text",
+      "input": "详见测试源码",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.065,
+      "node": "tests.test_text_fidelity::test_source_import_and_source_reading_keep_original_text",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-161",
+      "module": "原文保留",
+      "title": "test_blank_source_text_still_rejected",
+      "input": "详见测试源码 参数 ]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.047,
+      "node": "tests.test_text_fidelity::test_blank_source_text_still_rejected[]",
+      "actual": "测试断言全部通过"
+    },
+    {
+      "id": "UT-162",
+      "module": "原文保留",
+      "title": "test_blank_source_text_still_rejected",
+      "input": "详见测试源码 参数   \\n\\t ]",
+      "expected": "测试断言通过",
+      "status": "通过",
+      "seconds": 0.046,
+      "node": "tests.test_text_fidelity::test_blank_source_text_still_rejected[  \\n\\t ]",
+      "actual": "测试断言全部通过"
+    }
+  ],
+  "http": [
+    {
+      "title": "正式入口从项目外启动",
+      "input": "main.py --port，工作目录为独立 QA 目录",
+      "expected": "15 秒内健康接口可用",
+      "actual": {
+        "port": 62061,
+        "working_directory": "E:\\CzCode\\codex\\qa\\zhijing-report-20260907-000054-577593",
+        "pid": 8520
+      },
+      "status": "通过",
+      "seconds": 1.2957
+    },
+    {
+      "title": "服务健康检查",
+      "input": "GET /health",
+      "expected": "HTTP 200 且 status=ok",
+      "actual": {
+        "http_status": 200,
+        "body": {
+          "status": "ok",
+          "version": "0.2.0",
+          "model_provider": "extractive"
+        }
+      },
+      "status": "通过",
+      "seconds": 0.0015,
+      "request": null
+    },
+    {
+      "title": "交互文档入口",
+      "input": "GET /docs",
+      "expected": "HTTP 200 且包含 swagger-ui",
+      "actual": {
+        "http_status": 200,
+        "body": "\n    <!DOCTYPE html>\n    <html>\n    <head>\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <link type=\"text/css\" rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css\">\n    <link rel=\"shortcut icon\" href=\"https://fastapi.tiangolo.com/img/"
+      },
+      "status": "通过",
+      "seconds": 0.001,
+      "request": null
+    },
+    {
+      "title": "API 契约",
+      "input": "GET /openapi.json",
+      "expected": "HTTP 200 且包含统一工作流接口",
+      "actual": {
+        "http_status": 200,
+        "body": {
+          "openapi": "3.1.0",
+          "paths": [
+            "/health",
+            "/api/v1/sources/import",
+            "/api/v1/sources",
+            "/api/v1/sources/{source_id}",
+            "/api/v1/retrieval/search",
+            "/api/v1/knowledge-map",
+            "/api/v1/author/ask",
+            "/api/v1/reading/analyze",
+            "/api/v1/cards/generate",
+            "/api/v1/cards/export/tsv",
+            "/api/v1/cards/export/apkg",
+            "/api/v1/facts/review",
+            "/api/v1/companion/run"
+          ]
+        }
+      },
+      "status": "通过",
+      "seconds": 0.0746,
+      "request": null
+    },
+    {
+      "title": "导入示例回答",
+      "input": "POST /api/v1/sources/import",
+      "expected": "HTTP 200，返回 3 条资料",
+      "actual": {
+        "http_status": 200,
+        "body": [
+          {
+            "title": "如何通过主动回忆改善学习？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+            "url": null,
+            "topics": [
+              "学习方法",
+              "记忆"
+            ],
+            "origin": "demo",
+            "id": "25e74d4fd4f948be358654ec",
+            "created_at": "2026-09-06T16:01:08.745858+00:00"
+          },
+          {
+            "title": "怎样阅读一篇复杂长文？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+            "url": null,
+            "topics": [
+              "阅读方法",
+              "学习方法"
+            ],
+            "origin": "demo",
+            "id": "6237208fc181a01fa39e2e0d",
+            "created_at": "2026-09-06T16:01:08.758507+00:00"
+          },
+          {
+            "title": "如何理解知识地图？",
+            "author_id": "demo-author-2",
+            "author_name": "示例答主·图谱",
+            "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+            "url": null,
+            "topics": [
+              "知识管理"
+            ],
+            "origin": "demo",
+            "id": "be575ea4d72d33832a1ad77a",
+            "created_at": "2026-09-06T16:01:08.772562+00:00"
+          }
+        ]
+      },
+      "status": "通过",
+      "seconds": 0.0433,
+      "request": {
+        "items": [
+          {
+            "title": "如何通过主动回忆改善学习？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+            "topics": [
+              "学习方法",
+              "记忆"
+            ],
+            "origin": "demo"
+          },
+          {
+            "title": "怎样阅读一篇复杂长文？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+            "topics": [
+              "阅读方法",
+              "学习方法"
+            ],
+            "origin": "demo"
+          },
+          {
+            "title": "如何理解知识地图？",
+            "author_id": "demo-author-2",
+            "author_name": "示例答主·图谱",
+            "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+            "topics": [
+              "知识管理"
+            ],
+            "origin": "demo"
+          }
+        ]
+      }
+    },
+    {
+      "title": "重复导入去重",
+      "input": "POST /api/v1/sources/import",
+      "expected": "返回 ID 和首次导入相同",
+      "actual": {
+        "http_status": 200,
+        "body": [
+          {
+            "title": "如何通过主动回忆改善学习？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+            "url": null,
+            "topics": [
+              "学习方法",
+              "记忆"
+            ],
+            "origin": "demo",
+            "id": "25e74d4fd4f948be358654ec",
+            "created_at": "2026-09-06T16:01:08.745858+00:00"
+          },
+          {
+            "title": "怎样阅读一篇复杂长文？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+            "url": null,
+            "topics": [
+              "阅读方法",
+              "学习方法"
+            ],
+            "origin": "demo",
+            "id": "6237208fc181a01fa39e2e0d",
+            "created_at": "2026-09-06T16:01:08.758507+00:00"
+          },
+          {
+            "title": "如何理解知识地图？",
+            "author_id": "demo-author-2",
+            "author_name": "示例答主·图谱",
+            "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+            "url": null,
+            "topics": [
+              "知识管理"
+            ],
+            "origin": "demo",
+            "id": "be575ea4d72d33832a1ad77a",
+            "created_at": "2026-09-06T16:01:08.772562+00:00"
+          }
+        ]
+      },
+      "status": "通过",
+      "seconds": 0.0123,
+      "request": {
+        "items": [
+          {
+            "title": "如何通过主动回忆改善学习？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+            "topics": [
+              "学习方法",
+              "记忆"
+            ],
+            "origin": "demo"
+          },
+          {
+            "title": "怎样阅读一篇复杂长文？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+            "topics": [
+              "阅读方法",
+              "学习方法"
+            ],
+            "origin": "demo"
+          },
+          {
+            "title": "如何理解知识地图？",
+            "author_id": "demo-author-2",
+            "author_name": "示例答主·图谱",
+            "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+            "topics": [
+              "知识管理"
+            ],
+            "origin": "demo"
+          }
+        ]
+      }
+    },
+    {
+      "title": "资料数量",
+      "input": "GET /api/v1/sources",
+      "expected": "重复导入后仍为 3 条",
+      "actual": {
+        "http_status": 200,
+        "body": [
+          {
+            "title": "如何通过主动回忆改善学习？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+            "url": null,
+            "topics": [
+              "学习方法",
+              "记忆"
+            ],
+            "origin": "demo",
+            "id": "25e74d4fd4f948be358654ec",
+            "created_at": "2026-09-06T16:01:08.745858+00:00"
+          },
+          {
+            "title": "怎样阅读一篇复杂长文？",
+            "author_id": "demo-author-1",
+            "author_name": "示例答主·知行",
+            "text": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+            "url": null,
+            "topics": [
+              "阅读方法",
+              "学习方法"
+            ],
+            "origin": "demo",
+            "id": "6237208fc181a01fa39e2e0d",
+            "created_at": "2026-09-06T16:01:08.758507+00:00"
+          },
+          {
+            "title": "如何理解知识地图？",
+            "author_id": "demo-author-2",
+            "author_name": "示例答主·图谱",
+            "text": "知识地图可以把回答按照主题组织起来。图中的节点可以表示主题或回答，边表示归属关系。主题标签是整理工具，不等于自动发现了知识之间的因果关系。",
+            "url": null,
+            "topics": [
+              "知识管理"
+            ],
+            "origin": "demo",
+            "id": "be575ea4d72d33832a1ad77a",
+            "created_at": "2026-09-06T16:01:08.772562+00:00"
+          }
+        ]
+      },
+      "status": "通过",
+      "seconds": 0.0054,
+      "request": null
+    },
+    {
+      "title": "知识地图",
+      "input": "GET /api/v1/knowledge-map",
+      "expected": "7 个节点、5 条边",
+      "actual": {
+        "http_status": 200,
+        "body": {
+          "nodes": [
+            {
+              "id": "answer:25e74d4fd4f948be358654ec",
+              "position": {
+                "x": 360.0,
+                "y": 0.0
+              },
+              "data": {
+                "label": "如何通过主动回忆改善学习？",
+                "kind": "answer",
+                "source_id": "25e74d4fd4f948be358654ec",
+                "description": null,
+                "evidence": []
+              }
+            },
+            {
+              "id": "topic:d6543d3bdf2eedd9",
+              "position": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "data": {
+                "label": "学习方法",
+                "kind": "topic",
+                "source_id": null,
+                "description": null,
+                "evidence": []
+              }
+            },
+            {
+              "id": "topic:7a6335b379b9a161",
+              "position": {
+                "x": 0.0,
+                "y": 150.0
+              },
+              "data": {
+                "label": "记忆",
+                "kind": "topic",
+                "source_id": null,
+                "description": null,
+                "evidence": []
+              }
+            },
+            {
+              "id": "answer:6237208fc181a01fa39e2e0d",
+              "position": {
+                "x": 360.0,
+                "y": 100.0
+              },
+              "data": {
+                "label": "怎样阅读一篇复杂长文？",
+                "kind": "answer",
+                "source_id": "6237208fc181a01fa39e2e0d",
+                "description": null,
+                "evidence": []
+              }
+            },
+            {
+              "id": "topic:437c97a7c2abfc71",
+              "position": {
+                "x": 0.0,
+                "y": 300.0
+              },
+              "data": {
+                "label": "阅读方法",
+                "kind": "topic",
+                "source_id": null,
+                "description": null,
+                "evidence": []
+              }
+            },
+            {
+              "id": "answer:be575ea4d72d33832a1ad77a",
+              "position": {
+                "x": 360.0,
+                "y": 200.0
+              },
+              "data": {
+                "label": "如何理解知识地图？",
+                "kind": "answer",
+                "source_id": "be575ea4d72d33832a1ad77a",
+                "description": null,
+                "evidence": []
+              }
+            },
+            {
+              "id": "topic:d1af5b6220f76b6c",
+              "position": {
+                "x": 0.0,
+                "y": 450.0
+              },
+              "data": {
+                "label": "知识管理",
+                "kind": "topic",
+                "source_id": null,
+                "description": null,
+                "evidence": []
+              }
+            }
+          ],
+          "edges": [
+            {
+              "id": "topic:d6543d3bdf2eedd9->answer:25e74d4fd4f948be358654ec",
+              "source": "topic:d6543d3bdf2eedd9",
+              "target": "answer:25e74d4fd4f948be358654ec",
+              "label": "归类",
+              "data": null
+            },
+            {
+              "id": "topic:7a6335b379b9a161->answer:25e74d4fd4f948be358654ec",
+              "source": "topic:7a6335b379b9a161",
+              "target": "answer:25e74d4fd4f948be358654ec",
+              "label": "归类",
+              "data": null
+            },
+            {
+              "id": "topic:d6543d3bdf2eedd9->answer:6237208fc181a01fa39e2e0d",
+              "source": "topic:d6543d3bdf2eedd9",
+              "target": "answer:6237208fc181a01fa39e2e0d",
+              "label": "归类",
+              "data": null
+            },
+            {
+              "id": "topic:437c97a7c2abfc71->answer:6237208fc181a01fa39e2e0d",
+              "source": "topic:437c97a7c2abfc71",
+              "target": "answer:6237208fc181a01fa39e2e0d",
+              "label": "归类",
+              "data": null
+            },
+            {
+              "id": "topic:d1af5b6220f76b6c->answer:be575ea4d72d33832a1ad77a",
+              "source": "topic:d1af5b6220f76b6c",
+              "target": "answer:be575ea4d72d33832a1ad77a",
+              "label": "归类",
+              "data": null
+            }
+          ],
+          "total_sources": 3,
+          "truncated": false,
+          "mode": "extractive",
+          "classification": "按导入的 topics 标签分组；未标注归入未分类。",
+          "analysis_notice": "节点和连线表达资料组织方式，不代表已验证的客观事实。"
+        }
+      },
+      "status": "通过",
+      "seconds": 0.0066,
+      "request": null
+    },
+    {
+      "title": "阅读 制卡 审查 问答完整流程",
+      "input": "POST /api/v1/companion/run",
+      "expected": "四个模块均有结果，主回答位于引用首位，事实证据排除自身",
+      "actual": {
+        "http_status": 200,
+        "body": {
+          "source_id": "25e74d4fd4f948be358654ec",
+          "reading": {
+            "source_id": "25e74d4fd4f948be358654ec",
+            "mode": "extractive",
+            "summary": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+            "sections": [
+              {
+                "index": 0,
+                "heading": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+                "text": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+                "key_points": [
+                  "主动回忆是尝试在不看原文的情况下回想所学内容。",
+                  "阅读结束后，可以合上资料，用自己的话复述要点。",
+                  "遇到遗漏，再回到原文核对。"
+                ],
+                "guiding_question": "第 1 段的主张是什么，原文提供了哪些依据？"
+              }
+            ],
+            "notice": "当前采用分句与首句摘录，未进行语义推理；导读问题为模板。"
+          },
+          "cards": {
+            "cards": [
+              {
+                "front": "《如何通过主动回忆改善学习？》中，“主动回忆是尝试……”的完整表述是什么？",
+                "back": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+                "source_id": "25e74d4fd4f948be358654ec",
+                "evidence_excerpt": null
+              },
+              {
+                "front": "《如何通过主动回忆改善学习？》中，“阅读结束后，可……”的完整表述是什么？",
+                "back": "阅读结束后，可以合上资料，用自己的话复述要点。",
+                "source_id": "25e74d4fd4f948be358654ec",
+                "evidence_excerpt": null
+              },
+              {
+                "front": "《如何通过主动回忆改善学习？》中，“遇到遗漏……”的完整表述是什么？",
+                "back": "遇到遗漏，再回到原文核对。",
+                "source_id": "25e74d4fd4f948be358654ec",
+                "evidence_excerpt": null
+              },
+              {
+                "front": "《如何通过主动回忆改善学习？》中，“间隔复习是将复习……”的完整表述是什么？",
+                "back": "间隔复习是将复习安排在不同时间，而不是集中重复阅读。",
+                "source_id": "25e74d4fd4f948be358654ec",
+                "evidence_excerpt": null
+              },
+              {
+                "front": "《如何通过主动回忆改善学习？》中，“卡片应围绕一个……”的完整表述是什么？",
+                "back": "卡片应围绕一个清晰问题设计，答案尽量简洁。",
+                "source_id": "25e74d4fd4f948be358654ec",
+                "evidence_excerpt": null
+              }
+            ],
+            "mode": "extractive",
+            "notice": "自动摘录草稿，请检查问题质量与原文含义后再导入复习。"
+          },
+          "facts": {
+            "reviews": [
+              {
+                "claim": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+                "status": "mentioned_in_corpus",
+                "explanation": "语料中出现相同表述，尚未验证真实性。",
+                "evidence": [
+                  {
+                    "source_id": "6237208fc181a01fa39e2e0d",
+                    "title": "怎样阅读一篇复杂长文？",
+                    "author_id": "demo-author-1",
+                    "url": null,
+                    "chunk_index": 0,
+                    "excerpt": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+                    "score": 1.0
+                  }
+                ],
+                "conditions": [],
+                "evidence_analysis": []
+              }
+            ],
+            "mode": "extractive",
+            "scope": "仅审查已导入语料。文本出现、相似度和作者观点均不能证明客观事实。",
+            "analysis_notice": "规则匹配仅提示文本出现或相关性，不代表客观真实性证明。"
+          },
+          "author": {
+            "answer": "以下为相关历史回答摘录，请结合原文判断：\n[1] 主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。\n[2] 阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+            "mode": "extractive",
+            "citations": [
+              {
+                "source_id": "25e74d4fd4f948be358654ec",
+                "title": "如何通过主动回忆改善学习？",
+                "author_id": "demo-author-1",
+                "url": null,
+                "chunk_index": 0,
+                "excerpt": "主动回忆是尝试在不看原文的情况下回想所学内容。阅读结束后，可以合上资料，用自己的话复述要点。遇到遗漏，再回到原文核对。\n间隔复习是将复习安排在不同时间，而不是集中重复阅读。卡片应围绕一个清晰问题设计，答案尽量简洁。卡片中的主张需要保留来源，便于以后检查。",
+                "score": 0.4286
+              },
+              {
+                "source_id": "6237208fc181a01fa39e2e0d",
+                "title": "怎样阅读一篇复杂长文？",
+                "author_id": "demo-author-1",
+                "url": null,
+                "chunk_index": 0,
+                "excerpt": "阅读长文时，可以先识别作者的问题、结论和论据。按段落整理内容能够帮助发现论证结构。\n主动回忆是尝试在不看原文的情况下回想所学内容。对文章中的事实主张，应当寻找独立来源核对，不能因为文字出现过就认定为真。",
+                "score": 0.4286
+              }
+            ],
+            "identity_notice": "基于历史资料的阅读助手，不代表原答主本人或其当前观点。",
+            "citation_notice": "引用列表为提供给生成器的真实资料，编号从1开始；未标记的片段不代表被采用，语义支持关系仍需核对。"
+          }
+        }
+      },
+      "status": "通过",
+      "seconds": 0.0268,
+      "request": {
+        "source_id": "25e74d4fd4f948be358654ec",
+        "tasks": [
+          "reading",
+          "cards",
+          "facts",
+          "author"
+        ],
+        "question": "如何进行主动回忆？",
+        "claims": [
+          "主动回忆是尝试在不看原文的情况下回想所学内容。"
+        ]
+      }
+    },
+    {
+      "title": "TSV 文件下载",
+      "input": "POST /api/v1/cards/export/tsv",
+      "expected": "HTTP 200，包含 Tab 分隔声明和下载文件名",
+      "actual": {
+        "http_status": 200,
+        "body": "#separator:Tab\n#html:true\n#columns:Front\tBack\tSource\n《如何通过主动回忆改善学习？》中，“主动回忆是尝试……”的完整表述是什么？\t主动回忆是尝试在不看原文的情况下回想所学内容。\t25e74d4fd4f948be358654ec\n《如何通过主动回忆改善学习？》中，“阅读结束后，可……”的完整表述是什么？\t阅读结束后，可以合上资料，用自己的话复述要点。\t25e74d4fd4f948be358654ec\n《如何通过主动回忆改善学习？》中，“遇到遗漏……”的完整表述是什么？\t遇到遗漏，再回到原文核对。\t25e74d4fd4f948be358654ec"
+      },
+      "status": "通过",
+      "seconds": 0.0035,
+      "request": {
+        "cards": [
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“主动回忆是尝试……”的完整表述是什么？",
+            "back": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          },
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“阅读结束后，可……”的完整表述是什么？",
+            "back": "阅读结束后，可以合上资料，用自己的话复述要点。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          },
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“遇到遗漏……”的完整表述是什么？",
+            "back": "遇到遗漏，再回到原文核对。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          },
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“间隔复习是将复习……”的完整表述是什么？",
+            "back": "间隔复习是将复习安排在不同时间，而不是集中重复阅读。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          },
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“卡片应围绕一个……”的完整表述是什么？",
+            "back": "卡片应围绕一个清晰问题设计，答案尽量简洁。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          }
+        ]
+      }
+    },
+    {
+      "title": "APKG 卡包下载",
+      "input": "POST /api/v1/cards/export/apkg",
+      "expected": "HTTP 200，ZIP 完整且含 collection.anki2",
+      "actual": {
+        "http_status": 200,
+        "body": {
+          "bytes": 3184,
+          "content_type": "application/octet-stream"
+        }
+      },
+      "status": "通过",
+      "seconds": 0.1296,
+      "request": {
+        "cards": [
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“主动回忆是尝试……”的完整表述是什么？",
+            "back": "主动回忆是尝试在不看原文的情况下回想所学内容。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          },
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“阅读结束后，可……”的完整表述是什么？",
+            "back": "阅读结束后，可以合上资料，用自己的话复述要点。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          },
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“遇到遗漏……”的完整表述是什么？",
+            "back": "遇到遗漏，再回到原文核对。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          },
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“间隔复习是将复习……”的完整表述是什么？",
+            "back": "间隔复习是将复习安排在不同时间，而不是集中重复阅读。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          },
+          {
+            "front": "《如何通过主动回忆改善学习？》中，“卡片应围绕一个……”的完整表述是什么？",
+            "back": "卡片应围绕一个清晰问题设计，答案尽量简洁。",
+            "source_id": "25e74d4fd4f948be358654ec",
+            "evidence_excerpt": null
+          }
+        ]
+      }
+    },
+    {
+      "title": "不存在的资料",
+      "input": "GET /api/v1/sources/not-found",
+      "expected": "HTTP 404，source_not_found",
+      "actual": {
+        "http_status": 404,
+        "body": {
+          "error": {
+            "code": "source_not_found",
+            "message": "未找到指定资料。"
+          }
+        }
+      },
+      "status": "通过",
+      "seconds": 0.0048,
+      "request": null
+    },
+    {
+      "title": "跨答主主回答拒绝",
+      "input": "POST /api/v1/author/ask",
+      "expected": "HTTP 422，author_mismatch",
+      "actual": {
+        "http_status": 422,
+        "body": {
+          "error": {
+            "code": "author_mismatch",
+            "message": "主回答不属于指定答主。"
+          }
+        }
+      },
+      "status": "通过",
+      "seconds": 0.0084,
+      "request": {
+        "author_id": "demo-author-2",
+        "question": "主动回忆",
+        "primary_source_id": "25e74d4fd4f948be358654ec"
+      }
+    },
+    {
+      "title": "互斥输入校验",
+      "input": "POST /api/v1/reading/analyze",
+      "expected": "同时提供 text/source_id 时 HTTP 422",
+      "actual": {
+        "http_status": 422,
+        "body": {
+          "detail": [
+            {
+              "type": "value_error",
+              "loc": [
+                "body"
+              ],
+              "msg": "Value error, source_id 和 text 必须且只能提供一个",
+              "input": {
+                "source_id": "25e74d4fd4f948be358654ec",
+                "text": "重复输入"
+              },
+              "ctx": {
+                "error": {}
+              }
+            }
+          ]
+        }
+      },
+      "status": "通过",
+      "seconds": 0.0022,
+      "request": {
+        "source_id": "25e74d4fd4f948be358654ec",
+        "text": "重复输入"
+      }
+    }
+  ],
+  "ollama_smoke": {
+    "started_at": "2026-09-06T16:01:04.737436+00:00",
+    "mode": "mock",
+    "mock_responses": true,
+    "live_ollama_api_success_count": 0,
+    "live_ollama_api_response_received": false,
+    "live_model_validation_passed": false,
+    "all_capabilities_passed": true,
+    "model_response_measurement": "Counts HTTP 200 capability responses with mode=ollama. Upstream model responses rejected by application validation may produce 502 and are not counted as successes.",
+    "notice": "Fixed model responses verify HTTP integration and validation, not model quality.",
+    "cases": [
+      {
+        "capability": "reading",
+        "method": "POST",
+        "path": "/api/v1/reading/analyze",
+        "passed": true,
+        "http_status": 200,
+        "response_mode": "ollama",
+        "checks": {
+          "sections": 3,
+          "original_text_preserved": true
+        },
+        "seconds": 0.016
+      },
+      {
+        "capability": "cards",
+        "method": "POST",
+        "path": "/api/v1/cards/generate",
+        "passed": true,
+        "http_status": 200,
+        "response_mode": "ollama",
+        "checks": {
+          "cards": 1,
+          "evidence_excerpts_verified": true
+        },
+        "seconds": 0.0
+      },
+      {
+        "capability": "facts",
+        "method": "POST",
+        "path": "/api/v1/facts/review",
+        "passed": true,
+        "http_status": 200,
+        "response_mode": "ollama",
+        "checks": {
+          "status": "supported_by_evidence",
+          "evidence": 1
+        },
+        "seconds": 0.015
+      },
+      {
+        "capability": "knowledge",
+        "method": "GET",
+        "path": "/api/v1/knowledge-map?author_id=smoke-author",
+        "passed": true,
+        "http_status": 200,
+        "response_mode": "ollama",
+        "checks": {
+          "concepts": 2,
+          "edges": 1,
+          "sources_verified": true
+        },
+        "seconds": 0.016
+      },
+      {
+        "capability": "author",
+        "method": "POST",
+        "path": "/api/v1/author/ask",
+        "passed": true,
+        "http_status": 200,
+        "response_mode": "ollama",
+        "checks": {
+          "citations": 2,
+          "sources_verified": true
+        },
+        "seconds": 0.016
+      }
+    ],
+    "passed": true,
+    "model_calls": [
+      "reading",
+      "cards",
+      "facts",
+      "knowledge",
+      "author"
+    ],
+    "finished_at": "2026-09-06T16:01:07.335291+00:00"
+  },
+  "success": true
+}

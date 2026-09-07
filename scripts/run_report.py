@@ -87,6 +87,19 @@ def main():
         "ruff-format.log",
     )
     execute("正式入口环境自检", ["main.py", "--check"], "entry-check.json")
+    execute(
+        "五项能力 Ollama HTTP 模拟联调",
+        [
+            "scripts/ollama_smoke.py",
+            "--mock",
+            "--work-root",
+            str(work_dir / "ollama"),
+            "--report",
+            str(evidence / "ollama-http.json"),
+        ],
+        "ollama-http.log",
+    )
+    ollama_report = json.loads((evidence / "ollama-http.json").read_text("utf-8"))
     tests = test_results(evidence / "pytest.xml", project / "scripts/reporting/case_catalog.json")
     http_cases = run_http(project, evidence, work_dir, sys.executable)
     report = {
@@ -96,7 +109,7 @@ def main():
             "Python": platform.python_version(),
             "解释器": sys.executable,
             "系统": platform.platform(),
-            "数据模式": "extractive；独立临时数据库",
+            "数据模式": "离线基线 + Ollama 模拟服务；独立临时数据库",
             **{
                 name: version(name)
                 for name in ["fastapi", "uvicorn", "pydantic", "httpx", "pytest", "ruff", "genanki"]
@@ -105,6 +118,7 @@ def main():
         "checks": checks,
         "tests": tests,
         "http": http_cases,
+        "ollama_smoke": ollama_report,
         "success": all(c["exit_code"] == 0 for c in checks)
         and bool(tests)
         and all(c["status"] == "通过" for c in tests + http_cases),

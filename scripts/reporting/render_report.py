@@ -33,7 +33,7 @@ def write_reports(project, report):
     http_pass = sum(c["status"] == "通过" for c in http_cases)
     overall = "通过" if report["success"] else "存在未通过项"
     intro = f"本次验证结论：{overall}。自动化案例 {test_pass}/{len(tests)} 通过，真实进程与 HTTP 案例 {http_pass}/{len(http_cases)} 通过。运行时间：{report['timestamp']}。"
-    scope = "验证对象为项目正式启动入口和本地 Server。HTTP 场景使用独立数据库和项目内合成样例，问答为离线摘录；Ollama 测试使用模拟响应，没有执行真实模型推理。"
+    scope = "验证对象为项目正式启动入口和本地 Server。离线 HTTP 场景与五项能力 Ollama HTTP 联调均使用独立数据库和合成样例；Ollama 返回固定模拟响应，没有执行真实模型推理。"
     entry = "双击项目根目录 Start.cmd 启动服务；也可运行 python main.py --port 8000。服务默认仅监听 127.0.0.1，运行后访问 http://127.0.0.1:8000/docs；关闭服务终端或按 Ctrl+C 停止。"
     env_rows = [[key, value] for key, value in report["environment"].items()]
     checks = [
@@ -78,6 +78,20 @@ def write_reports(project, report):
         ("执行命令检查", checks, ["检查", "结果", "耗时秒", "日志"]),
         ("自动化测试案例", test_rows, test_headers),
         ("真实入口和 HTTP 测试", http_rows, http_headers),
+        (
+            "五项能力 Ollama HTTP 模拟联调",
+            [
+                [
+                    case["capability"],
+                    case["path"],
+                    case.get("http_status", "未收到"),
+                    "通过" if case["passed"] else "失败",
+                    compact(case.get("checks", {})),
+                ]
+                for case in report.get("ollama_smoke", {}).get("cases", [])
+            ],
+            ["能力", "API", "HTTP状态", "结论", "实际校验"],
+        ),
     ]
     md = ["# 知境运行与测试报告", intro, scope, "## 正式入口", entry]
     content = [

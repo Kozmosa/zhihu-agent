@@ -16,6 +16,7 @@ from zhijing.features.retrieval.service import LexicalRetriever
 from zhijing.features.sources.service import SourceService
 from zhijing.infrastructure.generation import ExtractiveGenerator
 from zhijing.infrastructure.ollama import OllamaGenerator
+from zhijing.infrastructure.openai_compatible import OpenAICompatibleGenerator
 from zhijing.infrastructure.sqlite_sources import SQLiteSourceRepository
 
 
@@ -38,20 +39,60 @@ class Container:
 
 
 def build_container(settings: Settings) -> Container:
-    if settings.model_provider not in {"extractive", "ollama"}:
-        raise ValueError("ZHIJING_MODEL_PROVIDER must be extractive or ollama")
+    if errors := settings.validation_errors():
+        raise ValueError(" ".join(errors))
     repository = SQLiteSourceRepository(settings.data_dir / "sources.sqlite3")
     repository.initialize()
     client = None
     generator = ExtractiveGenerator()
+    structured = None
     if settings.model_provider == "ollama":
-        client = httpx.Client(base_url=settings.ollama_url, timeout=60, trust_env=False)
-        generator = OllamaGenerator(client, settings.ollama_model)
+        headers = (
+            {"Authorization": f"Bearer {settings.ollama_api_key}"}
+            if settings.ollama_api_key
+            else {}
+        )
+        client = httpx.Client(
+            base_url=settings.ollama_url,
+            timeout=settings.ollama_timeout,
+            headers=headers,
+            trust_env=False,
+        )
+        structured = OllamaGenerator(
+            client,
+            settings.ollama_model,
+            output_format=settings.ollama_format,
+            max_input_chars=settings.ollama_max_input_chars,
+            num_predict=settings.ollama_num_predict,
+            num_ctx=settings.ollama_num_ctx,
+        )
+        generator = structured
+    elif settings.model_provider == "openai":
+        client = httpx.Client(
+            base_url=settings.openai_url,
+            timeout=settings.openai_timeout,
+            headers={"Authorization": f"Bearer {settings.openai_api_key}"}
+            if settings.openai_api_key
+            else {},
+            trust_env=False,
+        )
+        structured = OpenAICompatibleGenerator(
+            client,
+            settings.openai_model,
+            output_format=settings.openai_format,
+            max_input_chars=settings.openai_max_input_chars,
+            num_predict=settings.openai_max_tokens,
+            num_ctx=settings.openai_context_window,
+        )
+        generator = structured
     sources = SourceService(repository)
     retriever = LexicalRetriever(repository)
     author = AuthorService(repository, retriever, generator)
-    reader, cards = ReaderService(repository), CardService(repository)
-    facts = FactService(repository, retriever)
+    reader, cards = (
+        ReaderService(repository, generator=structured),
+        CardService(repository, generator=structured),
+    )
+    facts = FactService(repository, retriever, generator=structured)
     return Container(
         sources=sources,
         retriever=retriever,
@@ -59,7 +100,7 @@ def build_container(settings: Settings) -> Container:
         reader=reader,
         cards=cards,
         facts=facts,
-        knowledge=KnowledgeService(repository),
+        knowledge=KnowledgeService(repository, generator=structured),
         companion=CompanionService(sources, reader, cards, facts, author),
         export_dir=settings.data_dir / "exports-tmp",
         model_client=client,

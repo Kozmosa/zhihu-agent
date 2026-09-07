@@ -21,8 +21,14 @@ def normalize_data_directory() -> None:
 
 def check_environment() -> dict:
     normalize_data_directory()
-    settings = Settings.from_env()
     errors = []
+    try:
+        settings = Settings.from_env()
+    except ValueError as exc:
+        errors.append(str(exc))
+        settings = Settings(
+            data_dir=Path(os.getenv("ZHIJING_DATA_DIR", "E:/CzCode/codex/state/zhijing"))
+        )
     if sys.version_info < (3, 12):  # noqa: UP036 - entry point also diagnoses an older interpreter
         errors.append("Python 3.12 or newer is required.")
     dependencies = {}
@@ -32,8 +38,7 @@ def check_environment() -> dict:
             dependencies[name] = version(name)
         except (ImportError, PackageNotFoundError) as exc:
             errors.append(f"Dependency unavailable: {name}: {exc}")
-    if settings.model_provider not in {"extractive", "ollama"}:
-        errors.append("ZHIJING_MODEL_PROVIDER must be extractive or ollama.")
+    errors.extend(settings.validation_errors())
     if not errors:
         try:
             importlib.import_module("zhijing.app")

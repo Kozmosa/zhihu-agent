@@ -2,12 +2,12 @@ from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
 
-from zhijing.domain.models import NonBlank, Schema, ShortText
+from zhijing.domain.models import RawText, Schema, ShortText
 
 
 class ReadingRequest(Schema):
     source_id: ShortText | None = None
-    text: Annotated[NonBlank, Field(max_length=100_000)] | None = None
+    text: Annotated[RawText, Field(max_length=100_000)] | None = None
     chunk_size: int = Field(600, ge=100, le=2000)
 
     @model_validator(mode="after")
@@ -27,7 +27,7 @@ class Section(Schema):
 
 class ReadingResult(Schema):
     source_id: str | None
-    mode: Literal["extractive"] = "extractive"
+    mode: Literal["extractive", "ollama", "openai"] = "extractive"
     summary: str
     sections: list[Section]
     notice: str = "当前采用分句与首句摘录，未进行语义推理；导读问题为模板。"
