@@ -27,12 +27,15 @@ class Settings:
     openai_max_input_chars: int = 120000
     openai_max_tokens: int = 4096
     openai_context_window: int = 32768
+    openai_thinking: str = "auto"
 
     def validation_errors(self) -> list[str]:
         errors = []
         if self.model_provider not in {"extractive", "ollama", "openai"}:
             errors.append("ZHIJING_MODEL_PROVIDER must be extractive, ollama, or openai.")
         if self.model_provider == "openai":
+            if self.openai_thinking not in {"auto", "enabled", "disabled"}:
+                errors.append("ZHIJING_OPENAI_THINKING must be auto, enabled, or disabled.")
             # Reuse the same URL, credential and budget validation for both protocols.
             mapped = Settings(
                 data_dir=self.data_dir,
@@ -116,6 +119,7 @@ class Settings:
             openai_max_input_chars=_number("ZHIJING_OPENAI_MAX_INPUT_CHARS", "120000", int),
             openai_max_tokens=_number("ZHIJING_OPENAI_MAX_TOKENS", "4096", int),
             openai_context_window=_number("ZHIJING_OPENAI_CONTEXT_WINDOW", "32768", int),
+            openai_thinking=os.getenv("ZHIJING_OPENAI_THINKING", "auto"),
         )
 
 

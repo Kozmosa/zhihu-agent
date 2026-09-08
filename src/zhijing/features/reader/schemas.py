@@ -28,6 +28,7 @@ class Section(Schema):
 class ReadingResult(Schema):
     source_id: str | None
     mode: Literal["extractive", "ollama", "openai"] = "extractive"
+    batch_count: int = Field(1, ge=1)
     summary: str
     sections: list[Section]
     notice: str = "当前采用分句与首句摘录，未进行语义推理；导读问题为模板。"

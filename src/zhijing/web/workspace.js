@@ -1,0 +1,392 @@
+'use strict';
+
+const token = document.currentScript.dataset.configToken;
+const $ = id => document.getElementById(id);
+const modes = {extractive: '离线摘录', ollama: 'Ollama 模型', openai: 'API 模型'};
+const tasks = ['reading', 'author', 'cards', 'facts', 'knowledge'];
+const state = {selected: null, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive'};
+const pageSize = 20;
+
+function element(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+
+function status(id, text, kind = '') {
+  $(id).textContent = text;
+  $(id).className = 'status ' + kind;
+}
+
+function controls() {
+  document.querySelectorAll('button').forEach(button => { button.disabled = state.busy; });
+  document.querySelectorAll('.requires-source').forEach(button => { button.disabled = state.busy || !state.selected; });
+  $('prev-page').disabled = state.busy || state.page === 0;
+  $('next-page').disabled = state.busy || !state.more;
+  $('export-tsv').disabled = $('export-apkg').disabled = state.busy || !state.cards.length;
+}
+
+async function request(path, body, binary = false) {
+  let response;
+  try {
+    response = await fetch(path, {
+      method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
+      headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new Error('无法连接本地服务，请确认服务仍在运行。');
+  }
+  if (response.ok && binary) return response.blob();
+  let data;
+  try { data = await response.json(); } catch { throw new Error('服务响应无法解析，请检查服务日志。'); }
+  if (!response.ok) {
+    if (data.error?.message) throw new Error(data.error.message);
+    if (Array.isArray(data.detail)) {
+      const names = {title: '标题', text: '正文', author_id: '作者 ID', author_name: '作者名称', url: '来源链接', topics: '主题标签', claims: '主张', question: '问题', count: '卡片数量', deck_name: '牌组名称'};
+      const fields = [...new Set(data.detail.flatMap(error => error.loc || []).filter(key => names[key]).map(key => names[key]))];
+      throw new Error((fields.length ? fields.join('、') : '输入内容') + '未通过校验，请检查是否为空、格式或长度是否超限。');
+    }
+    throw new Error('请求失败，请检查输入或服务状态。');
+  }
+  return data;
+}
+
+async function job(id, pending, work) {
+  if (state.busy) return;
+  state.busy = true;
+  controls();
+  status(id, pending);
+  try { await work(); } catch (error) { status(id, error.message, 'error'); }
+  finally { state.busy = false; controls(); }
+}
+
+async function refreshMode() {
+  const health = await request('/health');
+  state.mode = health.model_provider;
+  $('service-mode').textContent = modes[state.mode] || state.mode;
+  $('model-notice').textContent = state.mode === 'extractive'
+    ? '当前为离线模式：规则与原文摘录，无模型请求。可在“模型配置”中启用 API。'
+    : '当前已启用模型：相关原文、证据和问题会发送至你配置的模型服务。每项操作可能产生 API 用量。';
+}
+
+function tab(name) {
+  for (const task of tasks) {
+    const active = name === task;
+    $('tab-' + task).setAttribute('aria-selected', String(active));
+    $('tab-' + task).tabIndex = active ? 0 : -1;
+    $('pane-' + task).hidden = !active;
+  }
+}
+
+function safeLink(node, value) {
+  node.hidden = true;
+  node.removeAttribute('href');
+  if (!value) return;
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) return;
+    node.href = url.href;
+    node.target = '_blank';
+    node.rel = 'noopener noreferrer';
+    node.hidden = false;
+  } catch { /* Keep invalid links hidden. */ }
+}
+
+function select(source) {
+  state.selected = source;
+  state.cards = [];
+  $('selected-title').textContent = source.title;
+  $('selected-meta').textContent = source.author_name + ' · 作者 ID：' + source.author_id + ' · ' + source.text.length + ' 字符';
+  $('selected-text').textContent = source.text;
+  $('source-preview').hidden = false;
+  safeLink($('selected-url'), source.url);
+  for (const task of tasks) { $(task + '-result').replaceChildren(); status(task + '-status', ''); }
+  renderSources();
+  controls();
+}
+
+function renderSources() {
+  const list = $('source-list');
+  list.replaceChildren();
+  if (!state.sources.length) list.append(element('div', state.filter ? '这个作者 ID 下没有资料。可清空筛选，或导入资料。' : '资料库还是空的。点击“导入资料”开始。', 'empty'));
+  for (const source of state.sources) {
+    const button = element('button', undefined, 'source-item');
+    button.type = 'button';
+    button.setAttribute('aria-pressed', String(state.selected?.id === source.id));
+    button.append(element('strong', source.title), element('small', source.author_name + ' · ' + source.text.length + ' 字符'));
+    button.addEventListener('click', () => { if (!state.busy) select(source); });
+    list.append(button);
+  }
+  $('page-number').textContent = '第 ' + (state.page + 1) + ' 页';
+}
+
+async function loadSources(page = state.page, filter = state.filter) {
+  // Fetch one extra item to decide whether another page exists.
+  const params = new URLSearchParams({offset: String(page * pageSize), limit: String(pageSize + 1)});
+  if (filter) params.set('author_id', filter);
+  const rows = await request('/api/v1/sources?' + params);
+  state.page = page;
+  state.filter = filter;
+  state.more = rows.length > pageSize;
+  state.sources = rows.slice(0, pageSize);
+  renderSources();
+  status('library-status', '');
+}
+
+function requireSource() {
+  if (!state.selected) throw new Error('请先在左侧选择一篇资料。');
+  return state.selected;
+}
+
+function authorScope(control) {
+  return $(control).value === 'author' ? requireSource().author_id : undefined;
+}
+
+function citations(parent, items) {
+  if (!items?.length) { parent.append(element('p', '没有可展示的引用证据。', 'muted small')); return; }
+  items.forEach((item, index) => {
+    const card = element('div', undefined, 'citation');
+    card.append(element('strong', '[' + (index + 1) + '] ' + item.title));
+    card.append(element('small', '作者 ID：' + item.author_id + ' · 原文段落 ' + (item.chunk_index + 1)));
+    card.append(element('blockquote', item.excerpt));
+    const link = element('a', '查看来源网页 ↗');
+    safeLink(link, item.url);
+    card.append(link);
+    parent.append(card);
+  });
+}
+
+function details(parent, title, text) {
+  const node = element('details');
+  node.append(element('summary', title), element('div', text, 'original'));
+  parent.append(node);
+}
+
+function finished(task, result, extra = '') {
+  status(task + '-status', '完成 · ' + (modes[result.mode] || result.mode) + (extra ? '\n' + extra : ''), 'success');
+}
+
+function renderReading(result) {
+  const root = $('reading-result');
+  root.append(element('h3', '文章摘要'), element('p', result.summary, 'prose'), element('p', result.notice, 'scope-note'));
+  for (const section of result.sections) {
+    const article = element('article', undefined, 'result-item');
+    article.append(element('h3', (section.index + 1) + '. ' + section.heading));
+    const points = element('ul');
+    section.key_points.forEach(point => points.append(element('li', point)));
+    article.append(points, element('p', '导读：' + section.guiding_question, 'prose'));
+    details(article, '对照原文', section.text);
+    root.append(article);
+  }
+}
+
+function renderAnswer(result) {
+  const root = $('author-result');
+  root.append(element('p', result.identity_notice, 'scope-note'), element('div', result.answer, 'prose answer'), element('h3', '参考资料'));
+  citations(root, result.citations);
+  root.append(element('p', result.citation_notice, 'scope-note'));
+}
+
+function renderCards(result) {
+  state.cards = result.cards;
+  const root = $('cards-result');
+  if (!result.cards.length) root.append(element('div', '没有生成卡片。请尝试其他资料。', 'empty'));
+  result.cards.forEach((card, index) => {
+    const article = element('article', undefined, 'memory-card');
+    article.append(element('div', 'CARD ' + String(index + 1).padStart(2, '0'), 'eyebrow'), element('h3', card.front));
+    details(article, '查看答案', card.back);
+    if (card.evidence_excerpt) details(article, '原文依据', card.evidence_excerpt);
+    root.append(article);
+  });
+}
+
+const factLabels = {mentioned_in_corpus: '语料中有相同表述', related_evidence: '存在相关证据', insufficient_evidence: '证据不足', supported_by_evidence: '证据支持', refuted_by_evidence: '证据反驳', mixed_evidence: '证据存在分歧'};
+function renderFacts(result) {
+  const root = $('facts-result');
+  root.append(element('p', result.scope + '\n' + result.analysis_notice, 'scope-note prose'));
+  for (const review of result.reviews) {
+    const article = element('article', undefined, 'result-item');
+    article.append(element('div', factLabels[review.status] || review.status, 'fact-label'), element('h3', review.claim), element('p', review.explanation, 'prose'));
+    if (review.conditions?.length) article.append(element('p', '适用条件：' + review.conditions.join('；'), 'prose'));
+    citations(article, review.evidence);
+    for (const analysis of review.evidence_analysis || []) {
+      const relation = {supports: '支持', refutes: '反驳', context: '背景'}[analysis.relation] || analysis.relation;
+      article.append(element('p', relation + ' · ' + analysis.citation.title + '：' + analysis.rationale, 'muted small prose'));
+    }
+    root.append(article);
+  }
+}
+
+function svg(tag, attributes = {}, text) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, String(value));
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function renderGraph(result) {
+  const root = $('knowledge-result');
+  root.append(element('p', result.classification + '\n' + result.analysis_notice, 'scope-note prose'));
+  if (!result.nodes.length) { root.append(element('div', '当前范围还没有知识节点。请先导入资料，或调整范围。', 'empty')); return; }
+  const preview = result.nodes.slice(0, 60);
+  const positions = new Map(preview.map((node, index) => [node.id, {x: 40 + (index % 3) * 300, y: 35 + Math.floor(index / 3) * 115}]));
+  const height = Math.ceil(preview.length / 3) * 115 + 30;
+  const canvas = svg('svg', {width: 960, height, viewBox: '0 0 960 ' + height, role: 'group', 'aria-label': '知识关系图，点击节点查看解释；也可使用下方节点列表'});
+  canvas.append(svg('title', {}, '知识地图'));
+  const defs = svg('defs');
+  const marker = svg('marker', {id: 'relation-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse'});
+  marker.append(svg('path', {d: 'M 0 0 L 10 5 L 0 10 z', fill: '#a9b8a3'}));
+  defs.append(marker); canvas.append(defs);
+  for (const edge of result.edges) {
+    const start = positions.get(edge.source), end = positions.get(edge.target);
+    if (!start || !end) continue;
+    const sx = start.x + 125, sy = start.y + 62, ex = end.x + 125, ey = end.y;
+    const path = svg('path', {d: `M ${sx} ${sy} C ${sx} ${sy + 25}, ${ex} ${ey - 25}, ${ex} ${ey}`, class: 'graph-edge', 'marker-end': 'url(#relation-arrow)'});
+    path.append(svg('title', {}, edge.label)); canvas.append(path);
+  }
+  const detail = element('div', '选择一个节点，查看解释与原文证据。', 'graph-detail');
+  const picker = element('select'); picker.id = 'graph-node-picker';
+  const label = element('label', '查看节点'); label.htmlFor = picker.id;
+  picker.append(element('option', '请选择节点…')); picker.children[0].value = '';
+  const showNode = node => {
+    detail.replaceChildren(element('h3', node.data.label), element('p', node.data.description || (node.data.kind === 'answer' ? '资料节点，来自已导入文章。' : '主题分类节点。'), 'prose'));
+    citations(detail, node.data.evidence);
+    if (node.data.source_id) {
+      const open = element('button', '选中这篇资料'); open.type = 'button';
+      open.addEventListener('click', () => job('knowledge-status', '正在读取资料…', async () => {
+        const source = await request('/api/v1/sources/' + encodeURIComponent(node.data.source_id));
+        select(source); tab('reading');
+      }));
+      detail.append(open);
+    }
+  };
+  result.nodes.forEach((node, index) => { const option = element('option', node.data.label); option.value = String(index); picker.append(option); });
+  picker.addEventListener('change', () => { if (picker.value !== '') showNode(result.nodes[Number(picker.value)]); });
+  preview.forEach(node => {
+    const point = positions.get(node.id);
+    const group = svg('g', {class: 'graph-node', 'data-kind': node.data.kind, tabindex: 0, role: 'button', 'aria-label': node.data.label, transform: `translate(${point.x},${point.y})`});
+    group.append(svg('rect', {width: 250, height: 62, rx: 10}), svg('title', {}, node.data.label));
+    group.append(svg('text', {x: 15, y: 27}, node.data.label.slice(0, 16)), svg('text', {x: 15, y: 47}, node.data.label.slice(16, 31) + (node.data.label.length > 31 ? '…' : '')));
+    const activate = () => { picker.value = String(result.nodes.indexOf(node)); showNode(node); };
+    group.addEventListener('click', activate);
+    group.addEventListener('keydown', event => { if (['Enter', ' '].includes(event.key)) { event.preventDefault(); activate(); } });
+    canvas.append(group);
+  });
+  const scroller = element('div', undefined, 'graph-scroll'); scroller.append(canvas);
+  root.append(scroller);
+  if (result.nodes.length > preview.length) root.append(element('p', '图示显示前 60 个节点，下方列表包含全部节点。', 'muted small'));
+  root.append(label, picker, detail, element('h3', '关系与证据'));
+  const relations = element('div', undefined, 'relation-list');
+  const byId = new Map(result.nodes.map(node => [node.id, node]));
+  for (const edge of result.edges) {
+    const title = (byId.get(edge.source)?.data.label || edge.source) + ' → ' + (byId.get(edge.target)?.data.label || edge.target) + ' · ' + edge.label;
+    const button = element('button', title); button.type = 'button';
+    button.addEventListener('click', () => {
+      detail.replaceChildren(element('h3', title), element('p', edge.data?.explanation || '根据资料主题标签建立的分类关系。', 'prose'));
+      if (edge.data?.evidence?.length) citations(detail, edge.data.evidence);
+    });
+    relations.append(button);
+  }
+  if (!result.edges.length) relations.append(element('p', '当前没有可展示的关系。', 'muted'));
+  root.append(relations);
+}
+
+async function runTask(task, work) {
+  return job(task + '-status', '正在处理，请稍候…', async () => {
+    $(task + '-result').replaceChildren();
+    if (task === 'cards') state.cards = [];
+    await refreshMode();
+    const result = await work();
+    ({reading: renderReading, author: renderAnswer, cards: renderCards, facts: renderFacts, knowledge: renderGraph})[task](result);
+    let extra = task === 'cards' ? result.notice : '';
+    if (task === 'knowledge') extra = `${result.nodes.length} 个节点 · ${result.edges.length} 条关系 · 范围内 ${result.total_sources} 篇资料` + (result.truncated ? '\n本次仅使用数量上限内的资料，未覆盖整个范围。' : '');
+    finished(task, result, extra);
+  });
+}
+
+async function saveSources(items) {
+  const saved = await request('/api/v1/sources/import', {items});
+  if (!saved.length) throw new Error('导入没有返回资料。');
+  // The write succeeded even if refreshing the list later fails.
+  select(saved[0]);
+  $('source-filter').value = '';
+  status('import-status', `已保存 ${saved.length} 条资料，已选中第一条。`, 'success');
+  try { await loadSources(0, ''); } catch (error) { status('library-status', '资料已保存，但列表刷新失败：' + error.message, 'error'); }
+}
+
+async function exportCards(format) {
+  return job('cards-status', '正在生成下载文件…', async () => {
+    if (!state.cards.length) throw new Error('请先生成卡片。');
+    const deck = $('deck-name').value.trim();
+    if (!deck) throw new Error('请填写牌组名称。');
+    const blob = await request('/api/v1/cards/export/' + format, {deck_name: deck, cards: state.cards}, true);
+    const url = URL.createObjectURL(blob);
+    const link = element('a'); link.href = url; link.download = 'zhijing-cards.' + format;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status('cards-status', '已生成下载文件，请在浏览器下载列表查看。' + (format === 'apkg' ? '打开 APKG 可导入 Anki。' : ''), 'success');
+  });
+}
+
+for (const task of tasks) {
+  $('tab-' + task).addEventListener('click', () => tab(task));
+  $('tab-' + task).addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const index = tasks.indexOf(task);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tasks.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tasks.length) % tasks.length;
+    tab(tasks[next]); $('tab-' + tasks[next]).focus();
+  });
+}
+$('open-import').addEventListener('click', () => { $('import-panel').hidden = false; $('import-title').focus(); });
+$('close-import').addEventListener('click', () => { $('import-panel').hidden = true; });
+$('reload-sources').addEventListener('click', () => job('library-status', '正在刷新…', async () => { await refreshMode(); await loadSources(); }));
+$('source-filter-form').addEventListener('submit', event => { event.preventDefault(); return job('library-status', '正在筛选…', () => loadSources(0, $('source-filter').value.trim())); });
+$('prev-page').addEventListener('click', () => job('library-status', '正在读取…', () => loadSources(Math.max(0, state.page - 1))));
+$('next-page').addEventListener('click', () => job('library-status', '正在读取…', () => loadSources(state.page + 1)));
+$('import-form').addEventListener('submit', event => {
+  event.preventDefault();
+  return job('import-status', '正在保存资料…', async () => {
+    const text = $('import-text').value;
+    if (!text.trim()) throw new Error('请填写非空正文。');
+    const topics = $('import-topics').value.split(/[,，]/).map(value => value.trim()).filter(Boolean);
+    if (topics.length > 20 || topics.some(value => value.length > 200)) throw new Error('主题标签最多 20 个，每个最多 200 字符。');
+    const item = {title: $('import-title').value.trim(), author_name: $('import-author-name').value.trim(), author_id: $('import-author-id').value.trim(), text, topics, origin: 'manual'};
+    const url = $('import-url').value.trim(); if (url) item.url = url;
+    await saveSources([item]);
+  });
+});
+$('import-json').addEventListener('click', () => job('import-status', '正在读取导入文件…', async () => {
+  const file = $('import-file').files[0];
+  if (!file) throw new Error('请先选择 JSON 文件。');
+  if (file.size > 10000000) throw new Error('文件超过 10 MB，请拆分后导入。');
+  let data; try { data = JSON.parse(await file.text()); } catch { throw new Error('文件不是有效 JSON，请检查格式。'); }
+  const items = Array.isArray(data) ? data : data?.items;
+  if (!Array.isArray(items) || items.length < 1 || items.length > 20) throw new Error('请提供包含 1 至 20 条资料的 items 数组。');
+  await saveSources(items);
+}));
+$('reading-form').addEventListener('submit', event => { event.preventDefault(); return runTask('reading', () => request('/api/v1/reading/analyze', {source_id: requireSource().id})); });
+$('author-form').addEventListener('submit', event => { event.preventDefault(); return runTask('author', () => {
+  const source = requireSource(), question = $('author-question').value.trim();
+  if (!question) throw new Error('请先填写问题。');
+  return request('/api/v1/author/ask', {author_id: source.author_id, primary_source_id: source.id, question});
+}); });
+$('cards-form').addEventListener('submit', event => { event.preventDefault(); return runTask('cards', () => request('/api/v1/cards/generate', {source_id: requireSource().id, count: Number($('card-count').value)})); });
+$('facts-form').addEventListener('submit', event => { event.preventDefault(); return runTask('facts', () => {
+  const claims = $('fact-claims').value.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+  if (!claims.length || claims.length > 20 || claims.some(value => value.length > 2000)) throw new Error('请填写 1 至 20 条主张，每条最多 2,000 字符。');
+  return request('/api/v1/facts/review', {claims, author_id: authorScope('fact-scope'), exclude_source_ids: $('exclude-current').checked && state.selected ? [state.selected.id] : []});
+}); });
+$('knowledge-form').addEventListener('submit', event => { event.preventDefault(); return runTask('knowledge', () => {
+  const params = new URLSearchParams({limit: $('graph-limit').value});
+  const author = authorScope('graph-scope'); if (author) params.set('author_id', author);
+  return request('/api/v1/knowledge-map?' + params);
+}); });
+$('export-tsv').addEventListener('click', () => exportCards('tsv'));
+$('export-apkg').addEventListener('click', () => exportCards('apkg'));
+
+const requestedTask = globalThis.location?.hash.slice(1);
+if (tasks.includes(requestedTask)) tab(requestedTask);
+job('library-status', '正在读取资料库…', async () => { await refreshMode(); await loadSources(); });

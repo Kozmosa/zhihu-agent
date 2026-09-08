@@ -34,6 +34,14 @@ class Source(SourceDraft):
     created_at: str
 
 
+class SourcePage(Schema):
+    items: list[Source]
+    total: int
+    offset: int
+    limit: int
+    has_more: bool
+
+
 class Citation(Schema):
     source_id: str
     title: str

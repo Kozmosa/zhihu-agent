@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "started_at": "2026-09-08T15:58:43.839684+00:00",
+  "provider": "openai",
+  "mode": "mock",
+  "synthetic_input": true,
+  "mock_responses": true,
+  "quality_status": "not_evaluated",
+  "notice": "Synthetic smoke checks verify transport, schema, source provenance and application invariants. They do not measure semantic quality, truth, or general model reliability. No model is admitted for production quality by this report.",
+  "admission_scope": "synthetic_five_capability_smoke_only",
+  "admission": "smoke_passed",
+  "all_capabilities_passed": true,
+  "live_model_validation_passed": false,
+  "cases": [
+    {
+      "capability": "reading",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "openai",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "sections": 3,
+        "original_text_preserved": true
+      },
+      "transport": {
+        "applicable": true,
+        "requests": 1,
+        "http_responses": 1,
+        "http_successes": 1,
+        "http_response_received": true,
+        "http_success_received": true
+      },
+      "seconds": 0.016
+    },
+    {
+      "capability": "cards",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "openai",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "cards": 1,
+        "source_grounding_verified": true
+      },
+      "transport": {
+        "applicable": true,
+        "requests": 1,
+        "http_responses": 1,
+        "http_successes": 1,
+        "http_response_received": true,
+        "http_success_received": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "capability": "facts",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "openai",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "reviews": 1,
+        "evidence_excerpts_verified": true
+      },
+      "transport": {
+        "applicable": true,
+        "requests": 1,
+        "http_responses": 1,
+        "http_successes": 1,
+        "http_response_received": true,
+        "http_success_received": true
+      },
+      "seconds": 0.015
+    },
+    {
+      "capability": "knowledge",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "openai",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "nodes": 2,
+        "edges": 1,
+        "graph_integrity_verified": true
+      },
+      "transport": {
+        "applicable": true,
+        "requests": 1,
+        "http_responses": 1,
+        "http_successes": 1,
+        "http_response_received": true,
+        "http_success_received": true
+      },
+      "seconds": 0.016
+    },
+    {
+      "capability": "author",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "openai",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "citations": 2,
+        "evidence_excerpts_verified": true
+      },
+      "transport": {
+        "applicable": true,
+        "requests": 1,
+        "http_responses": 1,
+        "http_successes": 1,
+        "http_response_received": true,
+        "http_success_received": true
+      },
+      "seconds": 0.0
+    }
+  ],
+  "passed": true,
+  "workflow": {
+    "requested": true,
+    "status": "passed",
+    "steps": [
+      {
+        "task": "reading",
+        "status": "passed",
+        "response_mode": "openai",
+        "checks": {
+          "sections": 1,
+          "original_text_preserved": true
+        }
+      },
+      {
+        "task": "cards",
+        "status": "passed",
+        "response_mode": "openai",
+        "checks": {
+          "cards": 1,
+          "source_grounding_verified": true
+        }
+      },
+      {
+        "task": "facts",
+        "status": "passed",
+        "response_mode": "openai",
+        "checks": {
+          "reviews": 1,
+          "evidence_excerpts_verified": true
+        }
+      },
+      {
+        "task": "author",
+        "status": "passed",
+        "response_mode": "openai",
+        "checks": {
+          "citations": 2,
+          "evidence_excerpts_verified": true
+        }
+      },
+      {
+        "task": "knowledge",
+        "status": "passed",
+        "response_mode": "openai",
+        "checks": {
+          "nodes": 2,
+          "edges": 1,
+          "graph_integrity_verified": true
+        }
+      }
+    ],
+    "http_status": 200,
+    "persisted_result_reloaded": true,
+    "idempotent_replay_without_model_calls": true,
+    "transport": {
+      "applicable": true,
+      "requests": 5,
+      "http_responses": 5,
+      "http_successes": 5,
+      "http_response_received": true,
+      "http_success_received": true
+    },
+    "seconds": 0.25
+  },
+  "model": "synthetic-fixture",
+  "mock_model_calls": [
+    "reading",
+    "cards",
+    "facts",
+    "knowledge",
+    "author",
+    "reading",
+    "cards",
+    "facts",
+    "author",
+    "knowledge"
+  ],
+  "transport": {
+    "applicable": true,
+    "requests": 10,
+    "http_responses": 10,
+    "http_successes": 10,
+    "http_response_received": true,
+    "http_success_received": true
+  },
+  "finished_at": "2026-09-08T15:58:45.284005+00:00"
+}

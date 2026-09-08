@@ -9,8 +9,19 @@ from zhijing.features.facts.router import router as facts
 from zhijing.features.knowledge.router import router as knowledge
 from zhijing.features.reader.router import router as reader
 from zhijing.features.retrieval.router import router as retrieval
+from zhijing.features.runs.router import router as runs
 from zhijing.features.sources.router import router as sources
 
 router = APIRouter(prefix="/api/v1")
-for feature_router in (sources, retrieval, knowledge, author, reader, cards, facts, companion):
+for feature_router in (
+    sources,
+    retrieval,
+    knowledge,
+    author,
+    reader,
+    cards,
+    facts,
+    companion,
+    runs,
+):
     router.include_router(feature_router)

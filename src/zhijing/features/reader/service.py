@@ -3,6 +3,7 @@ from zhijing.core.text import chunks, sentences
 from zhijing.domain.ports import SourceRepository, StructuredGenerator
 from zhijing.features.reader.generation import READING_INSTRUCTIONS, GeneratedReading
 from zhijing.features.reader.schemas import ReadingRequest, ReadingResult, Section
+from zhijing.infrastructure.batching import budget_batches
 
 
 class ReaderService:
@@ -39,27 +40,45 @@ class ReaderService:
         )
 
     def _analyze_with_model(self, source_id: str | None, passages: list[str]) -> ReadingResult:
-        result = self.generator.generate(
+        indexed = [{"index": index, "text": text} for index, text in enumerate(passages)]
+        batches = budget_batches(
+            self.generator,
+            indexed,
             task="reading",
             instructions=READING_INSTRUCTIONS,
-            payload={
-                "sections": [{"index": index, "text": text} for index, text in enumerate(passages)]
-            },
+            payload_for=lambda batch: {"sections": batch},
             response_model=GeneratedReading,
         )
-        indices = [section.index for section in result.sections]
-        if sorted(indices) != list(range(len(passages))):
-            raise DomainError(
-                "model_invalid_response", "阅读模型遗漏、重复或虚构了原文段落索引。", 502
+        by_index, summaries = {}, []
+        for batch in batches:
+            result = self.generator.generate(
+                task="reading",
+                instructions=READING_INSTRUCTIONS,
+                payload={"sections": batch},
+                response_model=GeneratedReading,
             )
-        by_index = {section.index: section for section in result.sections}
+            indices = [section.index for section in result.sections]
+            if sorted(indices) != [section["index"] for section in batch]:
+                raise DomainError(
+                    "model_invalid_response", "阅读模型遗漏、重复或虚构了本批原文段落索引。", 502
+                )
+            by_index.update((section.index, section) for section in result.sections)
+            summaries.append(result.summary)
+        summary = summaries[0]
+        notice = "摘要、标题、要点与导读问题由模型生成，需结合原文核对；各段原文保持不变。"
+        if len(batches) > 1:
+            summary = "分批阅读摘要（按原文顺序汇集，未经全文综合推断）：\n" + "\n\n".join(
+                f"第 {index + 1} 批：{item}" for index, item in enumerate(summaries)
+            )
+            notice += f"已按输入预算分 {len(batches)} 批处理全部段落；摘要为各批摘要汇集。"
         return ReadingResult(
             source_id=source_id,
             mode=getattr(self.generator, "mode", "ollama"),
-            summary=result.summary,
+            batch_count=len(batches),
+            summary=summary,
             sections=[
                 Section(text=text, **by_index[index].model_dump())
                 for index, text in enumerate(passages)
             ],
-            notice="摘要、标题、要点与导读问题由模型生成，需结合原文核对；各段原文保持不变。",
+            notice=notice,
         )

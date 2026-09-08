@@ -1,0 +1,48 @@
+﻿{
+    "checked_at":  "2026-09-08T15:58:45.3669412Z",
+    "passed":  true,
+    "checks":  [
+                   {
+                       "name":  "pytest",
+                       "exit_code":  0,
+                       "passed":  true
+                   },
+                   {
+                       "name":  "ruff",
+                       "exit_code":  0,
+                       "passed":  true
+                   },
+                   {
+                       "name":  "format",
+                       "exit_code":  0,
+                       "passed":  true
+                   },
+                   {
+                       "name":  "entry",
+                       "exit_code":  0,
+                       "passed":  true
+                   },
+                   {
+                       "name":  "http",
+                       "exit_code":  0,
+                       "passed":  true
+                   },
+                   {
+                       "name":  "smoke-extractive",
+                       "exit_code":  0,
+                       "passed":  true
+                   },
+                   {
+                       "name":  "smoke-ollama",
+                       "exit_code":  0,
+                       "passed":  true
+                   },
+                   {
+                       "name":  "smoke-openai",
+                       "exit_code":  0,
+                       "passed":  true
+                   }
+               ],
+    "live_requested":  false,
+    "evidence":  "E:\\CzCode\\ZhiJing Agent\\src\\.backend-work\\checks-20260908-235807-928"
+}

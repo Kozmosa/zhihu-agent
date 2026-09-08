@@ -30,5 +30,5 @@ class GeneratedEdge(Schema):
 
 
 class GeneratedGraph(Schema):
-    nodes: list[GeneratedNode] = Field(min_length=1, max_length=100)
+    nodes: list[GeneratedNode] = Field(max_length=100)
     edges: list[GeneratedEdge] = Field(max_length=200)

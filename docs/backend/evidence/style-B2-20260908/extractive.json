@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "started_at": "2026-09-08T15:58:40.641902+00:00",
+  "provider": "extractive",
+  "mode": "extractive",
+  "synthetic_input": true,
+  "mock_responses": false,
+  "quality_status": "not_evaluated",
+  "notice": "Synthetic smoke checks verify transport, schema, source provenance and application invariants. They do not measure semantic quality, truth, or general model reliability. No model is admitted for production quality by this report.",
+  "admission_scope": "synthetic_five_capability_smoke_only",
+  "admission": "smoke_passed",
+  "all_capabilities_passed": true,
+  "live_model_validation_passed": false,
+  "cases": [
+    {
+      "capability": "reading",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "extractive",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "sections": 3,
+        "original_text_preserved": true
+      },
+      "transport": {
+        "applicable": false,
+        "requests": 0,
+        "http_responses": 0,
+        "http_successes": 0,
+        "http_response_received": false,
+        "http_success_received": false
+      },
+      "seconds": 0.0
+    },
+    {
+      "capability": "cards",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "extractive",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "cards": 2,
+        "source_grounding_verified": true
+      },
+      "transport": {
+        "applicable": false,
+        "requests": 0,
+        "http_responses": 0,
+        "http_successes": 0,
+        "http_response_received": false,
+        "http_success_received": false
+      },
+      "seconds": 0.016
+    },
+    {
+      "capability": "facts",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "extractive",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "reviews": 1,
+        "evidence_excerpts_verified": true
+      },
+      "transport": {
+        "applicable": false,
+        "requests": 0,
+        "http_responses": 0,
+        "http_successes": 0,
+        "http_response_received": false,
+        "http_success_received": false
+      },
+      "seconds": 0.0
+    },
+    {
+      "capability": "knowledge",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "extractive",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "nodes": 4,
+        "edges": 3,
+        "graph_integrity_verified": true
+      },
+      "transport": {
+        "applicable": false,
+        "requests": 0,
+        "http_responses": 0,
+        "http_successes": 0,
+        "http_response_received": false,
+        "http_success_received": false
+      },
+      "seconds": 0.015
+    },
+    {
+      "capability": "author",
+      "status": "passed",
+      "passed": true,
+      "application_validation_passed": true,
+      "response_mode": "extractive",
+      "reason": "application_and_fixture_invariants_passed",
+      "http_status": 200,
+      "checks": {
+        "citations": 2,
+        "evidence_excerpts_verified": true
+      },
+      "transport": {
+        "applicable": false,
+        "requests": 0,
+        "http_responses": 0,
+        "http_successes": 0,
+        "http_response_received": false,
+        "http_success_received": false
+      },
+      "seconds": 0.0
+    }
+  ],
+  "passed": true,
+  "workflow": {
+    "requested": true,
+    "status": "passed",
+    "steps": [
+      {
+        "task": "reading",
+        "status": "passed",
+        "response_mode": "extractive",
+        "checks": {
+          "sections": 1,
+          "original_text_preserved": true
+        }
+      },
+      {
+        "task": "cards",
+        "status": "passed",
+        "response_mode": "extractive",
+        "checks": {
+          "cards": 3,
+          "source_grounding_verified": true
+        }
+      },
+      {
+        "task": "facts",
+        "status": "passed",
+        "response_mode": "extractive",
+        "checks": {
+          "reviews": 1,
+          "evidence_excerpts_verified": true
+        }
+      },
+      {
+        "task": "author",
+        "status": "passed",
+        "response_mode": "extractive",
+        "checks": {
+          "citations": 2,
+          "evidence_excerpts_verified": true
+        }
+      },
+      {
+        "task": "knowledge",
+        "status": "passed",
+        "response_mode": "extractive",
+        "checks": {
+          "nodes": 4,
+          "edges": 3,
+          "graph_integrity_verified": true
+        }
+      }
+    ],
+    "http_status": 200,
+    "persisted_result_reloaded": true,
+    "idempotent_replay_without_model_calls": true,
+    "transport": {
+      "applicable": false,
+      "requests": 0,
+      "http_responses": 0,
+      "http_successes": 0,
+      "http_response_received": false,
+      "http_success_received": false
+    },
+    "seconds": 0.219
+  },
+  "transport": {
+    "applicable": false,
+    "requests": 0,
+    "http_responses": 0,
+    "http_successes": 0,
+    "http_response_received": false,
+    "http_success_received": false
+  },
+  "finished_at": "2026-09-08T15:58:41.020102+00:00"
+}

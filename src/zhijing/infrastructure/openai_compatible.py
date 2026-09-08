@@ -8,9 +8,19 @@ from zhijing.infrastructure.ollama_transport import system_prompt
 
 
 class OpenAICompatibleTransport:
-    def __init__(self, client: httpx.Client, model: str, num_predict: int, num_ctx: int):
+    def __init__(
+        self,
+        client: httpx.Client,
+        model: str,
+        num_predict: int,
+        num_ctx: int,
+        thinking: str = "auto",
+    ):
+        if thinking not in {"auto", "enabled", "disabled"}:
+            raise ValueError("thinking must be auto, enabled, or disabled")
         self.client, self.model = client, model
         self.num_predict, self.num_ctx = num_predict, num_ctx
+        self.thinking = thinking
 
     def request(self, *, prompt: str, instructions: str, output_format: dict | str | None) -> str:
         body = {
@@ -24,6 +34,8 @@ class OpenAICompatibleTransport:
         }
         if output_format is not None:
             body["response_format"] = {"type": "json_object"}
+        if self.thinking != "auto":
+            body["thinking"] = {"type": self.thinking}
         try:
             response = self.client.post("chat/completions", json=body)
             response.raise_for_status()
@@ -66,8 +78,8 @@ class OpenAICompatibleTransport:
 class OpenAICompatibleGenerator(OllamaGenerator):
     mode = "openai"
 
-    def __init__(self, client: httpx.Client, model: str, **kwargs):
+    def __init__(self, client: httpx.Client, model: str, *, thinking: str = "auto", **kwargs):
         super().__init__(client, model, **kwargs)
         self.transport = OpenAICompatibleTransport(
-            client, model, kwargs.get("num_predict", 4096), kwargs.get("num_ctx", 32768)
+            client, model, kwargs.get("num_predict", 4096), kwargs.get("num_ctx", 32768), thinking
         )
