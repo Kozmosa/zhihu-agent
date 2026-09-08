@@ -1,0 +1,16 @@
+from collections.abc import Callable
+from typing import Protocol
+
+from zhijing.features.runs.schemas import RunPage, RunRecord, RunStatus
+
+
+class RunRepository(Protocol):
+    def create_or_get(
+        self, run: RunRecord, key_hash: str, request_hash: str
+    ) -> tuple[RunRecord, bool]: ...
+    def get(self, run_id: str) -> RunRecord: ...
+    def list(
+        self, offset: int, limit: int, source_id: str | None, status: RunStatus | None
+    ) -> RunPage: ...
+    def mutate(self, run_id: str, change: Callable[[RunRecord], None]) -> RunRecord: ...
+    def recover_interrupted(self) -> int: ...

@@ -1,5 +1,5 @@
 from zhijing.core.errors import DomainError
-from zhijing.domain.models import Source, SourceDraft
+from zhijing.domain.models import Source, SourceDraft, SourcePage
 from zhijing.domain.ports import SourceRepository
 
 
@@ -14,7 +14,10 @@ class SourceService:
         return source
 
     def import_items(self, items: list[SourceDraft]) -> list[Source]:
-        return [self.repository.save(item) for item in items]
+        return self.repository.save_many(items)
 
     def list(self, author_id: str | None, offset: int, limit: int) -> list[Source]:
-        return self.repository.list(author_id)[offset : offset + limit]
+        return self.repository.list(author_id, offset=offset, limit=limit)
+
+    def search(self, author_id: str | None, query: str, offset: int, limit: int) -> SourcePage:
+        return self.repository.search(author_id, query.strip(), offset, limit)

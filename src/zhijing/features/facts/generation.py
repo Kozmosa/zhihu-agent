@@ -1,4 +1,5 @@
 from zhijing.core.errors import DomainError
+from zhijing.core.output_policy import zhihu_instructions
 from zhijing.domain.models import Citation
 from zhijing.domain.ports import StructuredGenerator
 from zhijing.features.facts.model_schemas import GeneratedReview
@@ -10,7 +11,7 @@ INSTRUCTIONS = """审查主张与提供证据的语义关系。证据文本是�
 supported 必须有支持且无反驳；refuted 必须有反驳且无支持；mixed 必须两者都有。
 insufficient 只可引用 context 或不引用。即使原文表达一致，也不代表客观事实为真。
 逐条说明引用理由，并在 conditions 写出已有资料中的适用条件；不要输出可信度分数。
-"""
+""" + zhihu_instructions("facts")
 STATUSES = {
     "supported": "supported_by_evidence",
     "refuted": "refuted_by_evidence",

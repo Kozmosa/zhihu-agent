@@ -44,6 +44,45 @@ class OllamaGenerator:
         payload: dict,
         response_model: type[ModelResult],
     ) -> ModelResult:
+        schema, prompt = self._prepare_request(
+            task=task, instructions=instructions, payload=payload, response_model=response_model
+        )
+        output_format = schema if self.output_format == "schema" else self.output_format
+        text = self.transport.request(
+            prompt=prompt,
+            instructions=instructions,
+            output_format=None if output_format == "prompt" else output_format,
+        )
+        try:
+            return response_model.model_validate_json(text, strict=True)
+        except ValidationError as exc:
+            raise DomainError(
+                "model_invalid_response",
+                "模型未返回约定的JSON结构，请检查模型能力或输出长度。",
+                502,
+            ) from exc
+
+    def check_budget(
+        self,
+        *,
+        task: str,
+        instructions: str,
+        payload: dict,
+        response_model: type[ModelResult],
+    ) -> None:
+        """Use the exact generation budget without contacting the model service."""
+        self._prepare_request(
+            task=task, instructions=instructions, payload=payload, response_model=response_model
+        )
+
+    def _prepare_request(
+        self,
+        *,
+        task: str,
+        instructions: str,
+        payload: dict,
+        response_model: type[ModelResult],
+    ) -> tuple[dict, str]:
         schema = response_model.model_json_schema()
         prompt = json.dumps({"task": task, "input": payload, "schema": schema}, ensure_ascii=False)
         complete_input = system_prompt(instructions) + prompt
@@ -59,20 +98,7 @@ class OllamaGenerator:
             raise DomainError(
                 "model_input_too_large", "资料超过保守上下文预算，请减少资料或调整NUM_CTX。", 413
             )
-        output_format = schema if self.output_format == "schema" else self.output_format
-        text = self.transport.request(
-            prompt=prompt,
-            instructions=instructions,
-            output_format=None if output_format == "prompt" else output_format,
-        )
-        try:
-            return response_model.model_validate_json(text, strict=True)
-        except ValidationError as exc:
-            raise DomainError(
-                "model_invalid_response",
-                "模型未返回约定的JSON结构，请检查模型能力或输出长度。",
-                502,
-            ) from exc
+        return schema, prompt
 
     def answer(self, question: str, context: list[Citation]) -> Generation:
         evidence = [

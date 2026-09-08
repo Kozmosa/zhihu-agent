@@ -4,13 +4,17 @@ from typing import Protocol, TypeVar
 
 from pydantic import BaseModel
 
-from zhijing.domain.models import Citation, Generation, Source, SourceDraft
+from zhijing.domain.models import Citation, Generation, Source, SourceDraft, SourcePage
 
 
 class SourceRepository(Protocol):
     def save(self, draft: SourceDraft) -> Source: ...
+    def save_many(self, drafts: list[SourceDraft]) -> list[Source]: ...
     def get(self, source_id: str) -> Source | None: ...
-    def list(self, author_id: str | None = None) -> list[Source]: ...
+    def list(
+        self, author_id: str | None = None, *, offset: int = 0, limit: int | None = None
+    ) -> list[Source]: ...
+    def search(self, author_id: str | None, query: str, offset: int, limit: int) -> SourcePage: ...
 
 
 class Retriever(Protocol):

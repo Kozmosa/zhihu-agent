@@ -13,10 +13,12 @@ from zhijing.features.facts.service import FactService
 from zhijing.features.knowledge.service import KnowledgeService
 from zhijing.features.reader.service import ReaderService
 from zhijing.features.retrieval.service import LexicalRetriever
+from zhijing.features.runs.service import RunService
 from zhijing.features.sources.service import SourceService
 from zhijing.infrastructure.generation import ExtractiveGenerator
 from zhijing.infrastructure.ollama import OllamaGenerator
 from zhijing.infrastructure.openai_compatible import OpenAICompatibleGenerator
+from zhijing.infrastructure.sqlite_runs import SQLiteRunRepository
 from zhijing.infrastructure.sqlite_sources import SQLiteSourceRepository
 
 
@@ -30,6 +32,7 @@ class Container:
     facts: FactService
     knowledge: KnowledgeService
     companion: CompanionService
+    runs: RunService
     export_dir: Path
     model_client: httpx.Client | None = None
 
@@ -43,6 +46,8 @@ def build_container(settings: Settings) -> Container:
         raise ValueError(" ".join(errors))
     repository = SQLiteSourceRepository(settings.data_dir / "sources.sqlite3")
     repository.initialize()
+    run_repository = SQLiteRunRepository(settings.data_dir / "runs.sqlite3")
+    run_repository.initialize()
     client = None
     generator = ExtractiveGenerator()
     structured = None
@@ -83,6 +88,7 @@ def build_container(settings: Settings) -> Container:
             max_input_chars=settings.openai_max_input_chars,
             num_predict=settings.openai_max_tokens,
             num_ctx=settings.openai_context_window,
+            thinking=settings.openai_thinking,
         )
         generator = structured
     sources = SourceService(repository)
@@ -93,6 +99,14 @@ def build_container(settings: Settings) -> Container:
         CardService(repository, generator=structured),
     )
     facts = FactService(repository, retriever, generator=structured)
+    knowledge = KnowledgeService(repository, generator=structured)
+    companion = CompanionService(sources, reader, cards, facts, author, knowledge)
+    runs = RunService(
+        run_repository,
+        companion,
+        provider=settings.model_provider,
+        model=getattr(settings, f"{settings.model_provider}_model", None),
+    )
     return Container(
         sources=sources,
         retriever=retriever,
@@ -100,8 +114,9 @@ def build_container(settings: Settings) -> Container:
         reader=reader,
         cards=cards,
         facts=facts,
-        knowledge=KnowledgeService(repository, generator=structured),
-        companion=CompanionService(sources, reader, cards, facts, author),
+        knowledge=knowledge,
+        companion=companion,
+        runs=runs,
         export_dir=settings.data_dir / "exports-tmp",
         model_client=client,
     )

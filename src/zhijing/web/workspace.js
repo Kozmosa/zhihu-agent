@@ -387,4 +387,6 @@ $('knowledge-form').addEventListener('submit', event => { event.preventDefault()
 $('export-tsv').addEventListener('click', () => exportCards('tsv'));
 $('export-apkg').addEventListener('click', () => exportCards('apkg'));
 
+const requestedTask = globalThis.location?.hash.slice(1);
+if (tasks.includes(requestedTask)) tab(requestedTask);
 job('library-status', '正在读取资料库…', async () => { await refreshMode(); await loadSources(); });

@@ -29,7 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="知境 ZhiJing Agent",
         version=__version__,
         lifespan=lifespan,
-        description="本地知识助手 Server。五项能力支持 Ollama 和 OpenAI 兼容 API，默认离线摘录；首页可配置模型，通过 companion/run 组合功能。",
+        description="本地知识助手 Server。五项能力支持 Ollama 和 OpenAI 兼容 API，默认离线摘录；companion/run 同步组合，runs 提供运行历史、部分结果及恢复。",
     )
 
     @app.exception_handler(DomainError)

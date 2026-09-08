@@ -48,7 +48,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag),
     querySelectorAll: selector => created.filter(node => selector === 'button' ? node.tagName === 'button' : node.className.split(' ').includes(selector.slice(1))),
   };
-  const sandbox = {document, URL: LocalURL, URLSearchParams, setTimeout: fn => fn(), fetch: async (url, options) => {
+  const sandbox = {document, location: {hash: '#cards'}, URL: LocalURL, URLSearchParams, setTimeout: fn => fn(), fetch: async (url, options) => {
     requests.push({url, options});
     if (failures.has(url)) return {ok: false, json: async () => ({error: {message: failures.get(url)}})};
     return fetch(new URL(url, base), options);
@@ -68,6 +68,8 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   const click = async id => { await get(id).events.click(); await idle(); };
   const allText = node => [node.textContent, ...node.children.map(allText)].join('\n');
   await idle();
+  assert.equal(get('pane-cards').hidden, false, 'A direct capability link must open the requested tab');
+  assert.equal(get('pane-reading').hidden, true);
   assert.equal(get('run-reading').disabled, true);
   assert.equal(get('export-apkg').disabled, true);
   assert.match(allText(get('source-list')), /资料库还是空/);

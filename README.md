@@ -6,6 +6,10 @@ v0.2 已为长文拆解、答主问答、记忆卡片、事实审查、知识地
 
 ## 入口和报告
 
+当前后端支持五能力持久运行、部分失败后的显式重试，以及阅读、卡片、知识图谱的长文分批处理。运行接口见 [runs 契约](src/zhijing/features/runs/README.md)。阅读、卡片、事实审查使用 [知乎知识回答表达规范](skills/zhihu-knowledge-answer/SKILL.md)，对新模型结果执行长度和证据约束；模型语义质量仍需真实样本验收。
+
+在装有开发依赖的 Python 3.12+ 环境中运行 `python -m pytest` 即可执行完整回归测试。Windows 完整后端验收使用 `powershell -NoProfile -File src/Test-Backend.ps1 -Python <项目Python路径>`，涵盖静态检查、正式 HTTP 入口与三种 provider 的离线/模拟工作流；真实模型须单独显式启用。验证结果默认写入本地忽略目录 `src/.backend-work`，可用 `-WorkRoot` 指定位置。
+
 | 文件 | 用途 |
 | --- | --- |
 | [Start.cmd](Start.cmd) | Windows 双击启动；自动选择项目虚拟环境 |

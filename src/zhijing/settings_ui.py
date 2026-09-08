@@ -29,6 +29,7 @@ class ModelConfiguration(Schema):
     max_tokens: int = Field(default=4096, ge=256, le=32768)
     context_window: int = Field(default=32768, ge=2048, le=262144)
     max_input_chars: int = Field(default=120000, ge=1000, le=1000000)
+    thinking: Literal["auto", "enabled", "disabled"] = "auto"
 
     def settings(self, initial: Settings) -> Settings:
         # Clear both previous provider credentials when replacing a configuration.
@@ -47,6 +48,8 @@ class ModelConfiguration(Schema):
             f"{prefix}_{'num_ctx' if prefix == 'ollama' else 'context_window'}": self.context_window,
         }
         configured = replace(initial, model_provider=self.provider, **values)
+        if self.provider == "openai":
+            configured = replace(configured, openai_thinking=self.thinking)
         if errors := configured.validation_errors():
             raise DomainError("invalid_model_config", " ".join(errors), 422)
         return configured
@@ -126,6 +129,7 @@ def configuration_status(request: Request):
             else settings.openai_context_window,
             "max_input_chars": getattr(settings, f"{prefix}_max_input_chars"),
             "persistence": "session_only",
+            "thinking": settings.openai_thinking if provider == "openai" else "auto",
         }
 
 

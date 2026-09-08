@@ -1,0 +1,88 @@
+{
+  "started_at": "2026-09-08T08:11:08.957132+00:00",
+  "mode": "mock",
+  "mock_responses": true,
+  "live_ollama_api_success_count": 0,
+  "live_ollama_api_response_received": false,
+  "live_model_validation_passed": false,
+  "all_capabilities_passed": true,
+  "model_response_measurement": "Counts HTTP 200 capability responses with mode=ollama. Upstream model responses rejected by application validation may produce 502 and are not counted as successes.",
+  "notice": "Fixed model responses verify HTTP integration and validation, not model quality.",
+  "cases": [
+    {
+      "capability": "reading",
+      "method": "POST",
+      "path": "/api/v1/reading/analyze",
+      "passed": true,
+      "http_status": 200,
+      "response_mode": "ollama",
+      "checks": {
+        "sections": 3,
+        "original_text_preserved": true
+      },
+      "seconds": 0.016
+    },
+    {
+      "capability": "cards",
+      "method": "POST",
+      "path": "/api/v1/cards/generate",
+      "passed": true,
+      "http_status": 200,
+      "response_mode": "ollama",
+      "checks": {
+        "cards": 1,
+        "evidence_excerpts_verified": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "capability": "facts",
+      "method": "POST",
+      "path": "/api/v1/facts/review",
+      "passed": true,
+      "http_status": 200,
+      "response_mode": "ollama",
+      "checks": {
+        "status": "supported_by_evidence",
+        "evidence": 1
+      },
+      "seconds": 0.015
+    },
+    {
+      "capability": "knowledge",
+      "method": "GET",
+      "path": "/api/v1/knowledge-map?author_id=smoke-author",
+      "passed": true,
+      "http_status": 200,
+      "response_mode": "ollama",
+      "checks": {
+        "concepts": 2,
+        "edges": 1,
+        "sources_verified": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "capability": "author",
+      "method": "POST",
+      "path": "/api/v1/author/ask",
+      "passed": true,
+      "http_status": 200,
+      "response_mode": "ollama",
+      "checks": {
+        "citations": 2,
+        "sources_verified": true
+      },
+      "seconds": 0.016
+    }
+  ],
+  "passed": true,
+  "model_calls": [
+    "reading",
+    "cards",
+    "facts",
+    "knowledge",
+    "author"
+  ],
+  "finished_at": "2026-09-08T08:11:11.450939+00:00"
+}

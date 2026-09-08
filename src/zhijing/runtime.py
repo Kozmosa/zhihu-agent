@@ -22,6 +22,11 @@ class Runtime:
         self.settings = settings
         self.revision = 0
         self.current = Slot(build_container(settings))
+        try:
+            self.current.container.runs.recover_interrupted()
+        except Exception:
+            self.current.container.close()
+            raise
 
     @contextmanager
     def lease(self):
