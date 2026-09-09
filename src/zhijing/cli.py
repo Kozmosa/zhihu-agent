@@ -21,6 +21,7 @@ def valid_port(value: str) -> int:
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="ZhiJing Agent server (local access only)")
+    parser.add_argument("transcript_run_id", nargs="?", help=argparse.SUPPRESS)
     parser.add_argument("--port", type=valid_port, default=8000, help="HTTP port (default: 8000)")
     parser.add_argument(
         "--open-browser", action="store_true", help="Open model settings when healthy"
@@ -33,6 +34,13 @@ def create_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = create_parser().parse_args(argv)
+    if args.transcript_run_id:
+        from zhijing.core.config import Settings
+        from zhijing.infrastructure.sqlite_transcript import SQLiteTranscript
+        path = Settings().data_dir / "runs.sqlite3"
+        for event in SQLiteTranscript(path).list(args.transcript_run_id):
+            print(json.dumps(event, ensure_ascii=False))
+        return 0
     report = check_environment()
     if args.check:
         print(json.dumps(report, ensure_ascii=True, indent=2))
