@@ -110,6 +110,7 @@ def build_container(settings: Settings) -> Container:
         companion,
         provider=settings.model_provider,
         model=getattr(settings, f"{settings.model_provider}_model", None),
+        transcript=transcript,
     )
     return Container(
         sources=sources,

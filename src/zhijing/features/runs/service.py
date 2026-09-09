@@ -13,6 +13,7 @@ from zhijing.features.companion.service import CompanionService
 from zhijing.features.runs.ports import RunRepository
 from zhijing.features.runs.schemas import RunError, RunRecord, RunRequest, RunStep
 from zhijing.features.runs.snapshot import SourceSnapshot
+from zhijing.infrastructure.transcript_context import TranscriptContext, set_context, reset_context
 
 
 def _now() -> str:
@@ -62,11 +63,13 @@ class RunService:
         *,
         provider: str = "extractive",
         model: str | None = None,
+        transcript=None,
     ):
         self.repository = repository
         self.companion = companion
         self.provider = provider if provider in {"extractive", "ollama", "openai"} else "other"
         self.model = _model_label(model)
+        self.transcript = transcript
 
     def recover_interrupted(self) -> int:
         return self.repository.recover_interrupted()
@@ -176,7 +179,11 @@ class RunService:
                     step.started_at, step.finished_at, step.error = _now(), None, None
 
                 self.repository.mutate(run_id, start_step)
-                result = companion.execute(run.request, task)
+                token = set_context(TranscriptContext(self.transcript, run.id, run.id, task, run.attempts)) if self.transcript else None
+                try:
+                    result = companion.execute(run.request, task)
+                finally:
+                    if token: reset_context(token)
                 checkpoint()
 
                 def complete_step(current, task=task, result=result):
