@@ -20,6 +20,7 @@ from zhijing.infrastructure.ollama import OllamaGenerator
 from zhijing.infrastructure.openai_compatible import OpenAICompatibleGenerator
 from zhijing.infrastructure.sqlite_runs import SQLiteRunRepository
 from zhijing.infrastructure.sqlite_sources import SQLiteSourceRepository
+from zhijing.infrastructure.sqlite_transcript import SQLiteTranscript
 
 
 @dataclass
@@ -35,6 +36,7 @@ class Container:
     runs: RunService
     export_dir: Path
     model_client: httpx.Client | None = None
+    transcript: SQLiteTranscript | None = None
 
     def close(self) -> None:
         if self.model_client:
@@ -48,6 +50,8 @@ def build_container(settings: Settings) -> Container:
     repository.initialize()
     run_repository = SQLiteRunRepository(settings.data_dir / "runs.sqlite3")
     run_repository.initialize()
+    transcript = SQLiteTranscript(settings.data_dir / "runs.sqlite3")
+    transcript.initialize()
     client = None
     generator = ExtractiveGenerator()
     structured = None
@@ -106,6 +110,7 @@ def build_container(settings: Settings) -> Container:
         companion,
         provider=settings.model_provider,
         model=getattr(settings, f"{settings.model_provider}_model", None),
+        transcript=transcript,
     )
     return Container(
         sources=sources,
@@ -118,5 +123,6 @@ def build_container(settings: Settings) -> Container:
         companion=companion,
         runs=runs,
         export_dir=settings.data_dir / "exports-tmp",
+        transcript=transcript,
         model_client=client,
     )

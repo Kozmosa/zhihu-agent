@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query
+from fastapi.responses import JSONResponse
 
 from zhijing.dependencies import get_container
 from zhijing.features.runs.schemas import RunPage, RunRecord, RunRequest, RunStatus
@@ -48,3 +49,12 @@ def retry(run_id: str, container=Depends(get_container)):
 @router.post("/{run_id}/cancel", response_model=RunRecord)
 def cancel(run_id: str, container=Depends(get_container)):
     return container.runs.cancel(run_id)
+
+
+@router.get("/{run_id}/transcript", response_class=JSONResponse)
+def transcript(run_id: str, container=Depends(get_container)):
+    events = container.transcript.list(run_id) if container.transcript else []
+    return JSONResponse(
+        content=events,
+        headers={"Content-Disposition": f'attachment; filename="transcript-{run_id}.json"'},
+    )
