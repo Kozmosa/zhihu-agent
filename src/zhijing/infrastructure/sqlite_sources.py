@@ -64,7 +64,18 @@ class SQLiteSourceRepository:
     @staticmethod
     def _prepare(draft: SourceDraft) -> Source:
         # 完全相同的数据重复导入返回同一记录；修改内容会成为新版本。
-        canonical = json.dumps(draft.model_dump(mode="json"), sort_keys=True, ensure_ascii=False)
+        identity = draft.model_dump(mode="json", exclude={"content_extent", "provenance"})
+        # Preserve IDs from the original schema for legacy/manual imports.
+        if draft.content_extent != "unknown":
+            identity["content_extent"] = draft.content_extent
+        if draft.provenance:
+            # The same result can be fetched again with a new timestamp or tracking URL.
+            # Neither changes the content version; retain the first stored provenance.
+            identity["provenance"] = draft.provenance.model_dump(
+                mode="json", exclude={"fetched_at"}
+            )
+            identity["url"] = str(draft.provenance.canonical_url)
+        canonical = json.dumps(identity, sort_keys=True, ensure_ascii=False)
         source_id = hashlib.sha256(canonical.encode()).hexdigest()[:24]
         return Source(**draft.model_dump(), id=source_id, created_at=datetime.now(UTC).isoformat())
 

@@ -15,12 +15,14 @@ from zhijing.features.reader.service import ReaderService
 from zhijing.features.retrieval.service import LexicalRetriever
 from zhijing.features.runs.service import RunService
 from zhijing.features.sources.service import SourceService
+from zhijing.features.zhihu.service import ZhihuSearchService
 from zhijing.infrastructure.generation import ExtractiveGenerator
 from zhijing.infrastructure.ollama import OllamaGenerator
 from zhijing.infrastructure.openai_compatible import OpenAICompatibleGenerator
 from zhijing.infrastructure.sqlite_runs import SQLiteRunRepository
 from zhijing.infrastructure.sqlite_sources import SQLiteSourceRepository
 from zhijing.infrastructure.sqlite_transcript import SQLiteTranscript
+from zhijing.infrastructure.zhihu_search import ZhihuSearchClient
 
 
 @dataclass
@@ -34,13 +36,17 @@ class Container:
     knowledge: KnowledgeService
     companion: CompanionService
     runs: RunService
+    zhihu: ZhihuSearchService
     export_dir: Path
     model_client: httpx.Client | None = None
     transcript: SQLiteTranscript | None = None
+    zhihu_client: httpx.Client | None = None
 
     def close(self) -> None:
         if self.model_client:
             self.model_client.close()
+        if self.zhihu_client:
+            self.zhihu_client.close()
 
 
 def build_container(settings: Settings) -> Container:
@@ -112,6 +118,10 @@ def build_container(settings: Settings) -> Container:
         model=getattr(settings, f"{settings.model_provider}_model", None),
         transcript=transcript,
     )
+    zhihu_client = httpx.Client(
+        timeout=settings.zhihu_timeout, trust_env=False, follow_redirects=False
+    )
+    zhihu = ZhihuSearchService(ZhihuSearchClient(zhihu_client, settings.zhihu_access_secret))
     return Container(
         sources=sources,
         retriever=retriever,
@@ -122,7 +132,9 @@ def build_container(settings: Settings) -> Container:
         knowledge=knowledge,
         companion=companion,
         runs=runs,
+        zhihu=zhihu,
         export_dir=settings.data_dir / "exports-tmp",
         transcript=transcript,
         model_client=client,
+        zhihu_client=zhihu_client,
     )

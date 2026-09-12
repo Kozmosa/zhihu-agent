@@ -4,6 +4,7 @@ import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 from urllib.parse import urlsplit
 
 
@@ -28,9 +29,18 @@ class Settings:
     openai_max_tokens: int = 4096
     openai_context_window: int = 32768
     openai_thinking: str = "auto"
+    zhihu_url: ClassVar[str] = "https://developer.zhihu.com/api/v1/content/zhihu_search"
+    zhihu_access_secret: str = field(default="", repr=False)
+    zhihu_timeout: float = 20
 
     def validation_errors(self) -> list[str]:
         errors = []
+        if len(self.zhihu_access_secret) > 4096 or any(
+            not 33 <= ord(character) <= 126 for character in self.zhihu_access_secret
+        ):
+            errors.append("知乎 Access Secret 格式无效，请重新复制密钥。")
+        if not math.isfinite(self.zhihu_timeout) or not 1 <= self.zhihu_timeout <= 120:
+            errors.append("ZHIHU_SEARCH_TIMEOUT 必须在 1 到 120 秒之间。")
         if self.model_provider not in {"extractive", "ollama", "openai"}:
             errors.append("ZHIJING_MODEL_PROVIDER must be extractive, ollama, or openai.")
         if self.model_provider == "openai":
@@ -102,6 +112,8 @@ class Settings:
     def from_env(cls) -> "Settings":
         return cls(
             data_dir=Path(os.getenv("ZHIJING_DATA_DIR", "E:/CzCode/codex/state/zhijing")),
+            zhihu_access_secret=os.getenv("ZHIHU_ACCESS_SECRET", "").strip(),
+            zhihu_timeout=_number("ZHIHU_SEARCH_TIMEOUT", "20", float),
             model_provider=os.getenv("ZHIJING_MODEL_PROVIDER", "extractive"),
             ollama_url=os.getenv("ZHIJING_OLLAMA_URL", "http://127.0.0.1:11434"),
             ollama_model=os.getenv("ZHIJING_OLLAMA_MODEL", "qwen3:8b"),

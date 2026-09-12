@@ -4,7 +4,7 @@ const token = document.currentScript.dataset.configToken;
 const $ = id => document.getElementById(id);
 const modes = {extractive: '离线摘录', ollama: 'Ollama 模型', openai: 'API 模型'};
 const tasks = ['reading', 'author', 'cards', 'facts', 'knowledge'];
-const state = {selected: null, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive'};
+const state = {selected: null, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive', zhihuConfigured: false, zhihuResults: []};
 const pageSize = 20;
 
 function element(tag, text, className) {
@@ -25,6 +25,9 @@ function controls() {
   $('prev-page').disabled = state.busy || state.page === 0;
   $('next-page').disabled = state.busy || !state.more;
   $('export-tsv').disabled = $('export-apkg').disabled = state.busy || !state.cards.length;
+  $('run-zhihu-search').disabled = state.busy || !state.zhihuConfigured;
+  $('clear-zhihu-secret').disabled = state.busy || !state.zhihuConfigured;
+  state.zhihuResults.forEach(result => { result.button.disabled = state.busy || result.imported; });
 }
 
 async function request(path, body, binary = false) {
@@ -44,7 +47,7 @@ async function request(path, body, binary = false) {
   if (!response.ok) {
     if (data.error?.message) throw new Error(data.error.message);
     if (Array.isArray(data.detail)) {
-      const names = {title: '标题', text: '正文', author_id: '作者 ID', author_name: '作者名称', url: '来源链接', topics: '主题标签', claims: '主张', question: '问题', count: '卡片数量', deck_name: '牌组名称'};
+      const names = {title: '标题', text: '正文', author_id: '作者 ID', author_name: '作者名称', url: '来源链接', topics: '主题标签', claims: '主张', question: '问题', query: '搜索关键词', access_secret: 'Access Secret', count: '数量', deck_name: '牌组名称'};
       const fields = [...new Set(data.detail.flatMap(error => error.loc || []).filter(key => names[key]).map(key => names[key]))];
       throw new Error((fields.length ? fields.join('、') : '输入内容') + '未通过校验，请检查是否为空、格式或长度是否超限。');
     }
@@ -98,13 +101,24 @@ function select(source) {
   state.selected = source;
   state.cards = [];
   $('selected-title').textContent = source.title;
-  $('selected-meta').textContent = source.author_name + ' · 作者 ID：' + source.author_id + ' · ' + source.text.length + ' 字符';
+  const contentScoped = isContentScoped(source);
+  $('selected-meta').textContent = source.author_name + (contentScoped ? ' · 知乎搜索资料' : ' · 作者 ID：' + source.author_id) + ' · ' + source.text.length + ' 字符';
+  $('source-preview-label').textContent = source.content_extent === 'excerpt' ? '查看已导入摘要' : source.content_extent === 'fulltext' ? '查看完整原文' : '查看已导入内容';
+  $('selected-extent').hidden = source.content_extent !== 'excerpt';
+  $('selected-extent').textContent = source.content_extent === 'excerpt' ? '当前资料为摘要，不包含完整正文。后续分析仅依据已导入内容。' : '';
+  $('author-scope-notice').textContent = contentScoped
+    ? '知乎搜索未提供真实作者 ID，问答仅基于这条已导入内容，不合并同名作者的资料。助手不代表作者本人。'
+    : '以当前文章为主要资料，参考同一作者的已导入内容。助手不代表作者本人。';
   $('selected-text').textContent = source.text;
   $('source-preview').hidden = false;
   safeLink($('selected-url'), source.url);
   for (const task of tasks) { $(task + '-result').replaceChildren(); status(task + '-status', ''); }
   renderSources();
   controls();
+}
+
+function isContentScoped(source) {
+  return source.origin === 'zhihu' && !source.provenance?.external_author_id && source.author_id.startsWith('zhihu-content:');
 }
 
 function renderSources() {
@@ -115,7 +129,7 @@ function renderSources() {
     const button = element('button', undefined, 'source-item');
     button.type = 'button';
     button.setAttribute('aria-pressed', String(state.selected?.id === source.id));
-    button.append(element('strong', source.title), element('small', source.author_name + ' · ' + source.text.length + ' 字符'));
+    button.append(element('strong', source.title), element('small', source.author_name + ' · ' + source.text.length + ' 字符' + (source.content_extent === 'excerpt' ? ' · 摘要' : '')));
     button.addEventListener('click', () => { if (!state.busy) select(source); });
     list.append(button);
   }
@@ -149,7 +163,8 @@ function citations(parent, items) {
   items.forEach((item, index) => {
     const card = element('div', undefined, 'citation');
     card.append(element('strong', '[' + (index + 1) + '] ' + item.title));
-    card.append(element('small', '作者 ID：' + item.author_id + ' · 原文段落 ' + (item.chunk_index + 1)));
+    const attribution = item.author_id.startsWith('zhihu-content:') ? '该条知乎资料' : '作者 ID：' + item.author_id;
+    card.append(element('small', attribution + ' · 资料段落 ' + (item.chunk_index + 1)));
     card.append(element('blockquote', item.excerpt));
     const link = element('a', '查看来源网页 ↗');
     safeLink(link, item.url);
@@ -316,6 +331,48 @@ async function saveSources(items) {
   try { await loadSources(0, ''); } catch (error) { status('library-status', '资料已保存，但列表刷新失败：' + error.message, 'error'); }
 }
 
+function showZhihuConfiguration(configured) {
+  state.zhihuConfigured = configured === true;
+  $('zhihu-config-state').textContent = state.zhihuConfigured
+    ? '知乎凭证已配置，可以搜索。每次搜索最多返回 10 条摘要。'
+    : '尚未配置知乎凭证。请展开下方配置，输入 Access Secret 后再搜索。';
+  if (!state.zhihuConfigured) $('zhihu-config-panel').open = true;
+  controls();
+}
+
+function renderZhihuResults(items) {
+  const root = $('zhihu-results');
+  root.replaceChildren();
+  state.zhihuResults = [];
+  if (!items.length) root.append(element('div', '没有可导入的摘要。可以调整关键词后重新搜索。', 'empty'));
+  for (const source of items) {
+    const article = element('article', undefined, 'zhihu-result');
+    article.append(element('span', '知乎摘要', 'badge'), element('h3', source.title));
+    article.append(element('p', source.author_name + ' · 摘要 ' + source.text.length + ' 字符', 'muted small'));
+    article.append(element('div', source.text, 'original'));
+    const actions = element('div', undefined, 'actions');
+    const link = element('a', '查看知乎来源 ↗');
+    safeLink(link, source.url);
+    const button = element('button', '导入摘要');
+    button.type = 'button';
+    const result = {source, imported: false, button};
+    button.addEventListener('click', () => {
+      if (result.imported) return;
+      return job('zhihu-status', '正在导入摘要…', async () => {
+        await saveSources([source]);
+        result.imported = true;
+        button.textContent = '已导入';
+        status('zhihu-status', '摘要已保存并选中。后续分析仅依据已导入摘要。', 'success');
+      });
+    });
+    state.zhihuResults.push(result);
+    actions.append(button, link);
+    article.append(actions);
+    root.append(article);
+  }
+  controls();
+}
+
 async function exportCards(format) {
   return job('cards-status', '正在生成下载文件…', async () => {
     if (!state.cards.length) throw new Error('请先生成卡片。');
@@ -342,6 +399,52 @@ for (const task of tasks) {
 }
 $('open-import').addEventListener('click', () => { $('import-panel').hidden = false; $('import-title').focus(); });
 $('close-import').addEventListener('click', () => { $('import-panel').hidden = true; });
+$('open-zhihu').addEventListener('click', () => {
+  $('zhihu-panel').hidden = false;
+  return job('zhihu-status', '正在读取知乎配置…', async () => {
+    const result = await request('/api/v1/zhihu/status');
+    showZhihuConfiguration(result.configured);
+    status('zhihu-status', '');
+    if (state.zhihuConfigured) $('zhihu-query').focus();
+    else $('zhihu-secret').focus();
+  });
+});
+$('close-zhihu').addEventListener('click', () => { $('zhihu-panel').hidden = true; $('zhihu-secret').value = ''; });
+$('zhihu-config-form').addEventListener('submit', event => {
+  event.preventDefault();
+  return job('zhihu-config-status', '正在保存知乎凭证…', async () => {
+    const accessSecret = $('zhihu-secret').value.trim();
+    if (!accessSecret) throw new Error('请填写 Access Secret。');
+    const result = await request('/api/v1/zhihu/config', {access_secret: accessSecret});
+    $('zhihu-secret').value = '';
+    showZhihuConfiguration(result.configured);
+    if (!state.zhihuConfigured) throw new Error('凭证未能保存，请重试。');
+    status('zhihu-config-status', '已保存到当前服务会话。搜索时会验证凭证是否有效。', 'success');
+    $('zhihu-query').focus();
+  });
+});
+$('zhihu-search-form').addEventListener('submit', event => {
+  event.preventDefault();
+  return job('zhihu-status', '正在搜索知乎摘要…', async () => {
+    if (!state.zhihuConfigured) throw new Error('请先配置知乎 Access Secret。');
+    const query = $('zhihu-query').value.trim(), count = Number($('zhihu-count').value);
+    if (!query || query.length > 200) throw new Error('请填写 1 至 200 字符的搜索关键词。');
+    if (!Number.isInteger(count) || count < 1 || count > 10) throw new Error('结果数量必须是 1 至 10 的整数。');
+    $('zhihu-results').replaceChildren();
+    state.zhihuResults = [];
+    const result = await request('/api/v1/zhihu/search', {query, count});
+    renderZhihuResults(result.items);
+    const skipped = result.skipped_count ? ` 已略过 ${result.skipped_count} 条缺少有效摘要的结果。` : '';
+    status('zhihu-status', result.items.length ? `找到 ${result.items.length} 条摘要，请选择要导入的内容。` + skipped : (result.empty_reason || '未找到可导入的摘要。') + skipped, result.items.length ? 'success' : '');
+  });
+});
+$('clear-zhihu-secret').addEventListener('click', () => job('zhihu-config-status', '正在清除会话凭证…', async () => {
+  const result = await request('/api/v1/zhihu/config', {access_secret: ''});
+  $('zhihu-secret').value = '';
+  showZhihuConfiguration(result.configured);
+  if (state.zhihuConfigured) throw new Error('凭证未能清除，请重试。');
+  status('zhihu-config-status', '当前服务会话中的知乎凭证已清除。已保存资料仍可使用。', 'success');
+}));
 $('reload-sources').addEventListener('click', () => job('library-status', '正在刷新…', async () => { await refreshMode(); await loadSources(); }));
 $('source-filter-form').addEventListener('submit', event => { event.preventDefault(); return job('library-status', '正在筛选…', () => loadSources(0, $('source-filter').value.trim())); });
 $('prev-page').addEventListener('click', () => job('library-status', '正在读取…', () => loadSources(Math.max(0, state.page - 1))));
