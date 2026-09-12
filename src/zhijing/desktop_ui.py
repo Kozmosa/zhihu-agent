@@ -33,7 +33,9 @@ class DesktopAssistant:
         assets = Path(__file__).with_name("assets")
         self.app_icon = tk.PhotoImage(master=self.root, file=str(assets / "liukanshan.png"))
         self.ball_icon = tk.PhotoImage(master=self.root, file=str(assets / "liukanshan-ball.png"))
-        self.header_icon = tk.PhotoImage(master=self.root, file=str(assets / "liukanshan-header.png"))
+        self.header_icon = tk.PhotoImage(
+            master=self.root, file=str(assets / "liukanshan-header.png")
+        )
         self.root.iconphoto(True, self.app_icon)
         self._closed = False
         self._events: queue.Queue = queue.Queue()
@@ -321,6 +323,9 @@ class DesktopAssistant:
         self.menu.add_separator()
         self.menu.add_command(
             label="打开工作台", command=lambda: self._open_service_page("/workspace")
+        )
+        self.menu.add_command(
+            label="采集知乎资料", command=lambda: self._open_service_page("/workspace#companion")
         )
         self.menu.add_command(label="模型设置", command=lambda: self._open_service_page("/"))
         self.menu.add_separator()

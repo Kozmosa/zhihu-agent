@@ -102,7 +102,13 @@ def workspace_page(request: Request):
 
 @router.get("/assets/{filename}", include_in_schema=False, dependencies=[Depends(guard)])
 def workspace_asset(filename: str):
-    if filename not in {"workspace.js", "workspace.css", "chat-widget.js", "chat-widget.css"}:
+    if filename not in {
+        "workspace.js",
+        "workspace.css",
+        "chat-widget.js",
+        "chat-widget.css",
+        "zhihu-companion.user.js",
+    }:
         raise DomainError("asset_not_found", "未找到页面资源。", 404)
     return FileResponse(
         Path(__file__).with_name("web") / filename,

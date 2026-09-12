@@ -71,7 +71,16 @@ def test_owned_service_roundtrip_reuse_shutdown_and_durable_data(tmp_path, monke
 
 
 @contextmanager
-def fixture_server(*, title="知境 ZhiJing Agent", post_status=200, post_body=None, redirect=False):
+def fixture_server(
+    *,
+    title="知境 ZhiJing Agent",
+    post_status=200,
+    post_body=None,
+    redirect=False,
+    companion=True,
+    asset_status=200,
+    asset_body=None,
+):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -89,7 +98,35 @@ def fixture_server(*, title="知境 ZhiJing Agent", post_status=200, post_body=N
                     200, {"status": "ok", "version": "0.2.0", "model_provider": "extractive"}
                 )
             elif self.path == "/openapi.json":
-                self.respond(200, {"info": {"title": title}})
+                paths = (
+                    {
+                        "/api/v1/zhihu/companion/pair": {"post": {}},
+                        "/api/v1/zhihu/companion/status": {"get": {}},
+                        "/api/v1/zhihu/companion/inbox": {"get": {}},
+                        "/api/v1/zhihu/companion/inbox/{batch_id}": {"get": {}},
+                        "/api/v1/zhihu/companion/inbox/{batch_id}/dismiss": {"post": {}},
+                        "/api/v1/zhihu/companion/receive": {"post": {}},
+                    }
+                    if companion
+                    else {}
+                )
+                self.respond(200, {"info": {"title": title}, "paths": paths})
+            elif self.path == "/assets/zhihu-companion.user.js":
+                content = (
+                    asset_body
+                    if asset_body is not None
+                    else (
+                        "// ==UserScript==\n"
+                        "// @namespace zhijing.local/zhihu-companion\n"
+                        "// ==/UserScript==\n"
+                        "(() => {})();\n"
+                    )
+                ).encode("utf-8")
+                self.send_response(asset_status)
+                self.send_header("Content-Type", "text/javascript")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
             elif self.path == "/workspace":
                 if redirect:
                     self.send_response(302)
@@ -146,6 +183,37 @@ def test_refuses_occupied_port_with_another_application(tmp_path):
                 assert client.get(service.base_url + "/health").status_code == 200
         finally:
             service.shutdown()
+
+
+@pytest.mark.parametrize(
+    "server_options",
+    [
+        {"companion": False},
+        {"asset_status": 404, "asset_body": '{"error":{"code":"asset_not_found"}}'},
+        {"asset_body": "<html>A fallback page is not a userscript</html>"},
+        {
+            "asset_body": (
+                "// ==UserScript==\n"
+                "// @namespace zhijing.local/zhihu-companion\n"
+                "// ==/UserScript==\n"
+            )
+        },
+    ],
+    ids=["old-service", "missing-bundled-asset", "html-fallback", "empty-script"],
+)
+def test_refuses_incomplete_companion_without_displacing_service_or_creating_data(
+    tmp_path, server_options
+):
+    with fixture_server(**server_options) as (port, _):
+        service = DesktopService(tmp_path, port=port, data_dir=tmp_path / "data")
+        with pytest.raises(DesktopServiceError, match="退出旧版知境.*重新启动当前程序"):
+            service.ensure_running()
+        assert not (tmp_path / "data").exists()
+        assert service._server is None
+        assert service._thread is None
+        service.shutdown()
+        with httpx.Client(trust_env=False) as client:
+            assert client.get(service.base_url + "/health").status_code == 200
 
 
 def test_data_directory_priority_remains_explicit_then_environment_then_project(

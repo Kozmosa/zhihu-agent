@@ -132,6 +132,37 @@ class DesktopService:
         info = schema.get("info", {}) if isinstance(schema, dict) else {}
         if not isinstance(info, dict) or info.get("title") != "知境 ZhiJing Agent":
             raise DesktopServiceError("该端口被其他服务占用，请选择空闲端口；原服务未被修改。")
+        incompatible = (
+            "当前端口的知境服务缺少可用的知乎采集组件，可能仍是旧版。"
+            "请退出旧版知境及其本地服务，再重新启动当前程序。"
+        )
+        required_routes = {
+            "/api/v1/zhihu/companion/pair": "post",
+            "/api/v1/zhihu/companion/status": "get",
+            "/api/v1/zhihu/companion/inbox": "get",
+            "/api/v1/zhihu/companion/inbox/{batch_id}": "get",
+            "/api/v1/zhihu/companion/inbox/{batch_id}/dismiss": "post",
+            "/api/v1/zhihu/companion/receive": "post",
+        }
+        paths = schema.get("paths", {})
+        if not isinstance(paths, dict) or any(
+            not isinstance(paths.get(path), dict) or method not in paths[path]
+            for path, method in required_routes.items()
+        ):
+            raise DesktopServiceError(incompatible)
+        try:
+            script = self._request("GET", "/assets/zhihu-companion.user.js", timeout=3)
+        except DesktopServiceError:
+            raise DesktopServiceError(incompatible) from None
+        # A route alone does not guarantee that a frozen build contains its web asset.
+        header, marker, body = script.text.partition("// ==/UserScript==")
+        if (
+            not header.startswith("// ==UserScript==")
+            or not re.search(r"^//\s*@namespace\s+zhijing\.local/zhihu-companion\s*$", header, re.M)
+            or not marker
+            or not body.strip()
+        ):
+            raise DesktopServiceError(incompatible)
 
     def _port_is_occupied(self) -> bool:
         try:
