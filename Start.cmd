@@ -2,7 +2,13 @@
 setlocal
 set "ZHIJING_ROOT=%~dp0"
 set "PYTHONDONTWRITEBYTECODE=1"
-if exist "%ZHIJING_ROOT%.venv\Scripts\python.exe" (
+set "PYTHONUTF8=1"
+set "PYTHONNOUSERSITE=1"
+if not defined ZHIJING_DATA_DIR set "ZHIJING_DATA_DIR=%ZHIJING_ROOT%data"
+if exist "%ZHIJING_ROOT%.conda\python.exe" (
+    set "ZHIJING_PYTHON=%ZHIJING_ROOT%.conda\python.exe"
+    set "PATH=%ZHIJING_ROOT%.conda;%ZHIJING_ROOT%.conda\Library\bin;%ZHIJING_ROOT%.conda\Scripts;%PATH%"
+) else if exist "%ZHIJING_ROOT%.venv\Scripts\python.exe" (
     set "ZHIJING_PYTHON=%ZHIJING_ROOT%.venv\Scripts\python.exe"
 ) else if exist "%ZHIJING_ROOT%..\codex\envs\zhijing\Scripts\python.exe" (
     set "ZHIJING_PYTHON=%ZHIJING_ROOT%..\codex\envs\zhijing\Scripts\python.exe"

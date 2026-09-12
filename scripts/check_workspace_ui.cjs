@@ -36,7 +36,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
     node.checked = /\bchecked\b/.test(match[2]);
   }
   for (const match of html.matchAll(/<select\b[^>]*id="([^"]+)"[^>]*>\s*<option value="([^"]*)"/g)) nodes.get(match[1]).value = match[2];
-  const requests = [], downloads = [], failures = new Map();
+  const requests = [], downloads = [], failures = new Map(), fixtures = new Map();
   class LocalURL extends URL {
     static createObjectURL(blob) { downloads.push(blob); return 'blob:fixture'; }
     static revokeObjectURL() {}
@@ -51,6 +51,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   const sandbox = {document, location: {hash: '#cards'}, URL: LocalURL, URLSearchParams, setTimeout: fn => fn(), fetch: async (url, options) => {
     requests.push({url, options});
     if (failures.has(url)) return {ok: false, json: async () => ({error: {message: failures.get(url)}})};
+    if (fixtures.has(url)) return {ok: true, json: async () => fixtures.get(url)};
     return fetch(new URL(url, base), options);
   }};
   vm.createContext(sandbox);
@@ -84,6 +85,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.equal(get('run-reading').disabled, false);
   const primaryId = vm.runInContext('state.selected.id', sandbox);
   assert.equal(get('selected-title').textContent, get('import-title').value);
+  assert.equal(get('source-preview-label').textContent, '查看已导入内容');
 
   const sample = JSON.parse(fs.readFileSync(path.join(__dirname, '../examples/sources.json'), 'utf8'));
   get('import-file').files = [{size: 500, text: async () => JSON.stringify(sample)}];
@@ -152,5 +154,101 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   const unsafe = new Element('a'); sandbox.unsafeLink = unsafe;
   vm.runInContext("safeLink(unsafeLink, 'javascript:alert(1)')", sandbox);
   assert.equal(unsafe.hidden, true);
-  console.log(JSON.stringify({passed: true, scope: 'UI handlers plus real isolated HTTP; no browser rendering', cases: ['empty library', 'manual and JSON import', 'source fidelity', 'reading', 'author scope and citations', 'cards', 'TSV and APKG downloads', 'fact exclusion and validation', 'graph interaction', 'failure clears stale exports', 'pagination and filters', 'keyboard tabs', 'unsafe URL rejected']}));
+
+  // Only Zhihu upstream responses are simulated; import, storage, and author scope use
+  // the real isolated local service. No secret or request is sent to the public API.
+  fixtures.set('/api/v1/zhihu/status', {configured: false});
+  await click('open-zhihu');
+  assert.equal(get('zhihu-panel').hidden, false);
+  assert.equal(get('zhihu-config-panel').open, true);
+  assert.equal(get('run-zhihu-search').disabled, true);
+  assert.match(get('zhihu-config-state').textContent, /尚未配置/);
+  get('zhihu-query').value = '学习方法';
+  await submit('zhihu-search-form');
+  assert.match(get('zhihu-status').textContent, /先配置/);
+  assert.equal(requests.filter(row => row.url === '/api/v1/zhihu/search').length, 0);
+  await submit('zhihu-config-form');
+  assert.match(get('zhihu-config-status').className, /error/);
+  assert.equal(requests.filter(row => row.url === '/api/v1/zhihu/config').length, 0);
+  fixtures.set('/api/v1/zhihu/config', {configured: true});
+  get('zhihu-secret').value = 'fake-local-fixture-secret';
+  await submit('zhihu-config-form');
+  assert.match(get('zhihu-config-status').className, /success/);
+  assert.equal(get('zhihu-secret').value, '');
+  assert.equal(get('run-zhihu-search').disabled, false);
+  const configRequest = requests.find(row => row.url === '/api/v1/zhihu/config');
+  assert.equal(JSON.parse(configRequest.options.body).access_secret, 'fake-local-fixture-secret');
+  assert.equal(configRequest.options.headers['X-Zhijing-Token'], document.currentScript.dataset.configToken);
+  const zhihuItems = [1, 2].map(id => ({
+    title: '摘要 <script>not code</script> ' + id, author_name: '同名作者',
+    author_id: 'zhihu-content:answer:' + id, text: '摘要内容 ' + id + '，不是完整正文。',
+    url: 'https://www.zhihu.com/question/1/answer/' + id,
+    topics: [], origin: 'zhihu', content_extent: 'excerpt', provenance: null,
+  }));
+  fixtures.set('/api/v1/zhihu/search', {items: zhihuItems, has_more: false, skipped_count: 1, empty_reason: ''});
+  get('zhihu-count').value = '3';
+  await submit('zhihu-search-form');
+  assert.match(get('zhihu-status').className, /success/);
+  assert.match(get('zhihu-status').textContent, /略过 1/);
+  assert.equal(get('zhihu-results').children.length, 2);
+  assert.match(allText(get('zhihu-results')), /摘要 <script>not code<\/script> 1/);
+  assert.equal(get('zhihu-results').children[0].children[1].tagName, 'h3');
+  const searchRequest = requests.find(row => row.url === '/api/v1/zhihu/search');
+  assert.deepEqual(JSON.parse(searchRequest.options.body), {query: '学习方法', count: 3});
+  assert.equal(searchRequest.options.headers['X-Zhijing-Token'], document.currentScript.dataset.configToken);
+  const firstImport = vm.runInContext('state.zhihuResults[0].button', sandbox);
+  await firstImport.click(); await idle();
+  assert.match(get('zhihu-status').className, /success/, get('zhihu-status').textContent);
+  assert.equal(firstImport.disabled, true);
+  assert.equal(firstImport.textContent, '已导入');
+  assert.equal(get('source-preview-label').textContent, '查看已导入摘要');
+  assert.equal(get('selected-extent').hidden, false);
+  assert.match(get('selected-extent').textContent, /不包含完整正文/);
+  assert.match(get('author-scope-notice').textContent, /不合并同名作者/);
+  assert.doesNotMatch(get('selected-meta').textContent, /作者 ID/);
+  get('source-filter').value = 'zhihu-content:answer:1';
+  await submit('source-filter-form');
+  assert.match(allText(get('source-list')), /摘要/);
+  const importedCount = requests.filter(row => row.url === '/api/v1/sources/import').length;
+  await click('reload-sources');
+  assert.equal(firstImport.disabled, true, 'Unrelated jobs must not reenable an imported result');
+  await firstImport.click(); await idle();
+  assert.equal(requests.filter(row => row.url === '/api/v1/sources/import').length, importedCount);
+  const secondImport = vm.runInContext('state.zhihuResults[1].button', sandbox);
+  await secondImport.click(); await idle();
+  assert.equal(vm.runInContext('state.selected.author_id', sandbox), 'zhihu-content:answer:2');
+  get('author-question').value = '这条摘要说了什么？';
+  await submit('author-form');
+  assert.match(get('author-status').className, /success/);
+  const scopedBody = JSON.parse(requests.filter(row => row.url === '/api/v1/author/ask').at(-1).options.body);
+  assert.equal(scopedBody.author_id, 'zhihu-content:answer:2');
+  const searches = requests.filter(row => row.url === '/api/v1/zhihu/search').length;
+  get('zhihu-count').value = '11';
+  await submit('zhihu-search-form');
+  assert.match(get('zhihu-status').className, /error/);
+  assert.equal(requests.filter(row => row.url === '/api/v1/zhihu/search').length, searches);
+  get('zhihu-count').value = '3';
+  failures.set('/api/v1/zhihu/search', '知乎搜索额度已用完');
+  await submit('zhihu-search-form');
+  assert.match(get('zhihu-status').textContent, /额度已用完/);
+  assert.equal(get('zhihu-results').children.length, 0, 'A failed search must clear stale results');
+  failures.delete('/api/v1/zhihu/search');
+  fixtures.set('/api/v1/zhihu/search', {items: [], has_more: false, skipped_count: 0, empty_reason: '没有匹配资料'});
+  await submit('zhihu-search-form');
+  assert.equal(get('zhihu-status').textContent, '没有匹配资料');
+  assert.match(allText(get('zhihu-results')), /没有可导入/);
+  assert.equal(vm.runInContext('state.zhihuResults.length', sandbox), 0);
+  const selectedBeforeClear = vm.runInContext('state.selected.id', sandbox);
+  fixtures.set('/api/v1/zhihu/config', {configured: false});
+  await click('clear-zhihu-secret');
+  assert.match(get('zhihu-config-status').textContent, /凭证已清除/);
+  assert.equal(get('run-zhihu-search').disabled, true);
+  assert.equal(get('clear-zhihu-secret').disabled, true);
+  assert.equal(vm.runInContext('state.selected.id', sandbox), selectedBeforeClear);
+  assert.equal(JSON.parse(requests.filter(row => row.url === '/api/v1/zhihu/config').at(-1).options.body).access_secret, '');
+  get('zhihu-secret').value = 'unsaved-fake-secret';
+  await click('close-zhihu');
+  assert.equal(get('zhihu-secret').value, '');
+  assert.equal(get('zhihu-panel').hidden, true);
+  console.log(JSON.stringify({passed: true, scope: 'UI handlers plus real isolated HTTP; Zhihu responses mocked; no browser rendering', cases: ['empty library', 'manual and JSON import', 'source fidelity', 'reading', 'author scope and citations', 'cards', 'TSV and APKG downloads', 'fact exclusion and validation', 'graph interaction', 'failure clears stale exports', 'pagination and filters', 'keyboard tabs', 'unsafe URL rejected', 'Zhihu credential gating and clearing', 'Zhihu search request and text rendering', 'excerpt import and content-scoped author identity', 'imported button stays disabled', 'Zhihu count validation and upstream error', 'empty search results']}));
 })().catch(error => { console.error(error); process.exitCode = 1; });
