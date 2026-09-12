@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>知境 · 模型设置</title>
+<title>知境 · 服务管理</title>
 <style>
 :root{--ink:#14213d;--muted:#687893;--line:#e1e7f0;--blue:#2563eb;--paper:#f7f9fc;--tint:#f0f5ff;--shadow:0 3px 14px #14213d03}
 *{box-sizing:border-box}
@@ -99,7 +99,7 @@ footer{font-size:11px;color:#8b98ac;padding:12px 0 26px;text-align:center;letter
 <body>
 <header><nav><div class="brand"><span class="mark">知</span><span>知境 <span class="en">知识工作台</span></span></div><div class="nav-links"><a href="/workspace">← 知识工作台</a><a href="/docs" target="_blank" rel="noopener">API 文档 ↗</a></div></nav></header>
 <main>
-<div class="intro"><div><div class="eyebrow">工作空间 / 模型设置</div><h1>模型设置</h1><p>连接模型服务，或使用无需密钥的离线摘录。</p></div><span class="badge"><span class="dot"></span>本机工作空间</span></div>
+<div class="intro"><div><div class="eyebrow">管理后台 / 服务设置</div><h1>服务管理</h1><p>管理分析服务与知乎搜索连接。日常阅读请进入知识工作台。</p></div><span class="badge"><span class="dot"></span>本机管理后台</span></div>
 <div class="layout"><div>
 <section class="panel"><div class="panel-head"><span class="number">01</span><h2>连接模型服务</h2></div>
 <form id="config-form" autocomplete="off">
@@ -119,6 +119,17 @@ footer{font-size:11px;color:#8b98ac;padding:12px 0 26px;text-align:center;letter
 <div class="actions"><button type="submit" class="primary" id="apply">测试并启用</button><button type="button" id="test">仅测试连接</button></div>
 <div id="config-result" class="status" role="status" aria-live="polite"></div>
 </form></section>
+<section id="zhihu-admin" class="panel" aria-labelledby="zhihu-admin-heading">
+<div class="panel-head"><span class="number">02</span><h2 id="zhihu-admin-heading">知乎搜索连接</h2></div>
+<p id="zhihu-config-state" class="hint" role="status" aria-live="polite">正在读取搜索连接状态…</p>
+<details id="zhihu-config-panel" open><summary>管理知乎开放平台凭据</summary>
+<form id="zhihu-config-form" autocomplete="off">
+<div class="field"><label for="zhihu-secret">知乎 Access Secret</label><input id="zhihu-secret" type="password" required maxlength="4096" autocomplete="new-password" spellcheck="false" placeholder="输入知乎开放平台密钥"></div>
+<p class="hint">凭据仅保存在当前服务内存中，重启后需重新配置。关闭页面不会清除凭据；可使用下方按钮主动清除。<a href="https://developer.zhihu.com/docs?key=authorization" target="_blank" rel="noopener noreferrer">查看获取方法 ↗</a></p>
+<p class="hint">保存只更新连接配置，不执行搜索。实际搜索时验证凭据并使用搜索额度。</p>
+<div class="actions"><button id="save-zhihu-secret" type="submit" class="primary">保存到当前会话</button><button id="clear-zhihu-secret" type="button" disabled>清除会话凭据</button></div>
+</form><div id="zhihu-config-status" class="status" role="status" aria-live="polite"></div>
+</details></section>
 <section class="panel workspace-entry" aria-labelledby="workspace-heading"><h2 id="workspace-heading">回到知识工作台</h2><p>导入资料后，即可使用问答、卡片、审查和知识地图。下方“快速试读”只用于体验长文拆解。</p><a class="workspace-button" href="/workspace">进入知识工作台 →</a><div class="capability-links" aria-label="直接进入对应功能"><a href="/workspace#reading">长文拆解</a><a href="/workspace#author">答主问答</a><a href="/workspace#cards">记忆卡片与导出</a><a href="/workspace#facts">事实审查</a><a href="/workspace#knowledge">知识地图</a></div></section>
 <section class="panel"><div class="panel-head"><span class="number">02</span><h2>快速试读 · 长文拆解</h2></div><p class="hint" style="margin-bottom:14px">使用当前启用模式。其他能力请从上方进入知识工作台；启用模型后，输入内容会发送至该模型服务。</p><label for="reading-text">阅读内容</label><textarea id="reading-text" placeholder="粘贴你想拆解的文字，查看摘要与分段分析……" maxlength="100000"></textarea><div class="actions"><button id="read" type="button">开始拆解</button></div><div id="reading-status" class="status" role="status" aria-live="polite"></div><div id="reading-result"></div></section>
 </div><aside>
@@ -133,7 +144,7 @@ const $=id=>document.getElementById(id);
 const labels={extractive:'离线摘录',ollama:'Ollama',openai:'OpenAI 兼容 API'};
 let busy=false;
 function message(id,text,kind=''){const node=$(id);node.textContent=text;node.className='status '+kind;}
-function setBusy(value){busy=value;document.querySelectorAll('button').forEach(b=>{if(!b.closest('#chat-root'))b.disabled=value;});}
+function setBusy(value){busy=value;document.querySelectorAll('button').forEach(b=>{if(!b.closest('#chat-root')&&!b.closest('#zhihu-admin'))b.disabled=value;});}
 function setProtocol(reset=false){const provider=$('provider').value;const offline=provider==='extractive';$('model-fields').hidden=offline;$('model-fields').querySelectorAll('input,select').forEach(e=>e.disabled=offline);$('schema-option').disabled=provider!=='ollama';$('test').hidden=offline;$('apply').textContent=offline?'启用离线模式':'测试并启用';$('protocol-hint').textContent=offline?'规则与摘录模式，不调用模型服务。':provider==='ollama'?'调用 Ollama 原生 /api/generate 接口。':'适用于提供 Chat Completions 接口的服务商。';$('url-hint').textContent=provider==='ollama'?'填写 Ollama 基础地址，可带 /api；不要填写 /api/generate。':'填写服务商给出的基础地址，保留 /v1 等前缀；不要填写 /chat/completions。';if(reset&&!offline){$('base-url').value=provider==='ollama'?'http://127.0.0.1:11434':'';$('model').value='';$('api-key').value='';$('output-format').value=provider==='ollama'?'schema':'json';}if(provider!=='ollama'&&$('output-format').value==='schema')$('output-format').value='json';}
 async function api(path,body){let response;try{response=await fetch(path,{method:body===undefined?'GET':'POST',cache:'no-store',headers:body===undefined?{}:{'Content-Type':'application/json','X-Zhijing-Token':token},body:body===undefined?undefined:JSON.stringify(body)});}catch{throw new Error('无法连接本地服务，请确认服务仍在运行。');}let data;try{data=await response.json();}catch{throw new Error('服务返回了无法解析的响应。');}if(!response.ok)throw new Error(data.error?.message||'请求未通过，请检查输入内容。');return data;}
 async function refresh(fill=false){const [state,health]=await Promise.all([api('/api/v1/settings/model'),api('/health')]);$('active-provider').textContent=labels[state.provider];$('active-model').textContent=state.provider==='extractive'?'无需密钥，可直接试读':state.model+' · '+(state.has_api_key?'已配置密钥':'未使用密钥');$('health').textContent=health.status==='ok'?'运行中 · v'+health.version:'异常';if(fill){$('provider').value=state.provider==='extractive'?'openai':state.provider;for(const [id,key]of [['base-url','base_url'],['model','model'],['output-format','output_format'],['timeout','timeout'],['max-tokens','max_tokens'],['context-window','context_window'],['max-input','max_input_chars']])$(id).value=state[key];setProtocol();}}
@@ -147,6 +158,7 @@ $('offline').addEventListener('click',()=>configure('apply',{provider:'extractiv
 $('read').addEventListener('click',async()=>{if(busy)return;const text=$('reading-text').value;if(!text.trim()){message('reading-status','请先输入一段文字。','error');return;}setBusy(true);$('reading-result').replaceChildren();message('reading-status','正在拆解，请稍候…');try{const result=await api('/api/v1/reading/analyze',{text});message('reading-status','拆解完成 · '+labels[result.mode]+'\n'+result.notice,'success');const title=document.createElement('h3');title.textContent=result.summary;$('reading-result').append(title);for(const section of result.sections){const article=document.createElement('article');article.className='section-result';const heading=document.createElement('h3');heading.textContent=section.heading||'段落 '+(section.index+1);const content=document.createElement('p');content.textContent=(section.key_points||[]).join('\n');const original=document.createElement('small');original.textContent='原文：'+section.text;const question=document.createElement('small');question.textContent='导读：'+section.guiding_question;article.append(heading,content,question,original);$('reading-result').append(article);}}catch(error){message('reading-status',error.message,'error');}finally{setBusy(false);}});
 refresh(true).catch(error=>{message('config-result',error.message,'error');$('health').textContent='连接失败';});
 </script>
+<script src="/assets/admin-zhihu.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
 __CHAT_WIDGET__
 </body>
 </html>

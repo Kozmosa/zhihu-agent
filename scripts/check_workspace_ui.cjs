@@ -167,7 +167,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   await click('empty-search');
   assert.equal(get('zhihu-panel').hidden, false);
   assert.equal(get('import-panel').hidden, true);
-  assert.equal(get('zhihu-secret').focused, true);
+  assert.equal(get('zhihu-query').focused, true);
   await click('open-import');
   assert.equal(get('zhihu-panel').hidden, true);
 
@@ -201,7 +201,8 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   get('author-question').value = 'How does active recall help learning?';
   await submit('author-form');
   assert.match(get('author-status').className, /success/);
-  assert(allText(get('author-result')).includes('Fixture Author') || allText(get('author-result')).includes('ui-author'));
+  assert(allText(get('author-result')).includes('UI fixture'), 'References must retain the real source title');
+  assert(!allText(get('author-result')).includes('作者 ID'), 'Implementation identifiers stay out of ordinary results');
   const authorBody = JSON.parse(requests.find(row => row.url === '/api/v1/author/ask').options.body);
   assert.equal(authorBody.author_id, 'ui-author'); assert.equal(authorBody.primary_source_id, primaryId);
 
@@ -362,21 +363,41 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   fixtures.set('/api/v1/zhihu/status', {configured: false});
   await click('open-zhihu');
   assert.equal(get('zhihu-panel').hidden, false);
-  assert.equal(get('zhihu-config-panel').open, true);
+  assert.equal(get('zhihu-secret'), undefined, 'Credential controls must not appear on the user workspace');
+  assert.equal(get('zhihu-config-form'), undefined);
   assert.equal(get('run-zhihu-search').disabled, true);
-  assert.match(get('zhihu-config-state').textContent, /尚未配置/);
+  assert.match(get('zhihu-config-state').textContent, /暂未就绪.*管理员/);
   get('zhihu-query').value = '学习方法';
   await submit('zhihu-search-form');
-  assert.match(get('zhihu-status').textContent, /先配置/);
+  assert.match(get('zhihu-status').textContent, /暂未就绪/);
   assert.equal(requests.filter(row => row.url === '/api/v1/zhihu/search').length, 0);
-  await submit('zhihu-config-form');
-  assert.match(get('zhihu-config-status').className, /error/);
+
+  // Administration runs in its own document and IIFE, never in the user-page DOM.
+  const adminHTML = await (await fetch(base + '/')).text();
+  const adminSection = adminHTML.match(/<section id="zhihu-admin"[\s\S]*?<\/section>/)[0];
+  const adminNodes = new Map();
+  for(const match of adminSection.matchAll(/\bid="([^"]+)"/g)) {
+    adminNodes.set(match[1], {value: '', textContent: '', className: '', events: {}, addEventListener(name, callback) { this.events[name] = callback; }});
+  }
+  const adminDocument = {currentScript: {dataset: {configToken: adminHTML.match(/data-config-token="([^"]+)"/)[1]}}, getElementById: id => { assert(adminNodes.has(id), 'Missing admin element ' + id); return adminNodes.get(id); }};
+  const adminSandbox = {document: adminDocument, fetch: sandbox.fetch};
+  vm.createContext(adminSandbox);
+  const adminScript = await fetch(base + '/assets/admin-zhihu.js');
+  assert.equal(adminScript.status, 200);
+  vm.runInContext(await adminScript.text(), adminSandbox);
+  await idle();
+  const adminGet = id => adminNodes.get(id);
+  const adminSubmit = async () => { await adminGet('zhihu-config-form').events.submit({preventDefault() {}}); await idle(); };
+  await adminSubmit();
+  assert.match(adminGet('zhihu-config-status').className, /error/);
   assert.equal(requests.filter(row => row.url === '/api/v1/zhihu/config').length, 0);
   fixtures.set('/api/v1/zhihu/config', {configured: true});
-  get('zhihu-secret').value = 'fake-local-fixture-secret';
-  await submit('zhihu-config-form');
-  assert.match(get('zhihu-config-status').className, /success/);
-  assert.equal(get('zhihu-secret').value, '');
+  adminGet('zhihu-secret').value = 'fake-local-fixture-secret';
+  await adminSubmit();
+  assert.match(adminGet('zhihu-config-status').className, /success/);
+  assert.equal(adminGet('zhihu-secret').value, '');
+  fixtures.set('/api/v1/zhihu/status', {configured: true});
+  await click('open-zhihu');
   assert.equal(get('run-zhihu-search').disabled, false);
   const configRequest = requests.find(row => row.url === '/api/v1/zhihu/config');
   assert.equal(JSON.parse(configRequest.options.body).access_secret, 'fake-local-fixture-secret');
@@ -414,7 +435,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.equal(get('source-preview-label').textContent, '查看已导入摘要');
   assert.equal(get('selected-extent').hidden, false);
   assert.match(get('selected-extent').textContent, /不包含完整正文/);
-  assert.match(get('author-scope-notice').textContent, /不合并同名作者/);
+  assert.match(get('author-scope-notice').textContent, /不.*合并.*同名作者/);
   assert.doesNotMatch(get('selected-meta').textContent, /作者 ID/);
   get('source-filter').value = 'zhihu-content:answer:1';
   await submit('source-filter-form');
@@ -424,7 +445,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.equal(firstImport.disabled, true, 'Unrelated jobs must not reenable an imported result');
   await firstImport.click(); await idle();
   assert.equal(requests.filter(row => row.url === '/api/v1/sources/import').length, importedCount);
-  assert.equal(get('zhihu-panel').hidden, false, 'Desktop keeps search results available after importing');
+  assert.equal(get('zhihu-panel').hidden, true, 'Import returns to the five capabilities');
   sandbox.innerWidth = 390;
   vm.runInContext('syncLibraryDrawer()', sandbox);
   assert.equal(get('library-drawer').open, false);
@@ -467,15 +488,15 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.equal(vm.runInContext('state.zhihuResults.length', sandbox), 0);
   const selectedBeforeClear = vm.runInContext('state.selected.id', sandbox);
   fixtures.set('/api/v1/zhihu/config', {configured: false});
-  await click('clear-zhihu-secret');
-  assert.match(get('zhihu-config-status').textContent, /凭证已清除/);
+  await adminGet('clear-zhihu-secret').events.click(); await idle();
+  assert.match(adminGet('zhihu-config-status').textContent, /凭据已清除/);
+  fixtures.set('/api/v1/zhihu/status', {configured: false});
+  await click('open-zhihu');
   assert.equal(get('run-zhihu-search').disabled, true);
-  assert.equal(get('clear-zhihu-secret').disabled, true);
+  assert.equal(adminGet('clear-zhihu-secret').disabled, true);
   assert.equal(vm.runInContext('state.selected.id', sandbox), selectedBeforeClear);
   assert.equal(JSON.parse(requests.filter(row => row.url === '/api/v1/zhihu/config').at(-1).options.body).access_secret, '');
-  get('zhihu-secret').value = 'unsaved-fake-secret';
   await click('close-zhihu');
-  assert.equal(get('zhihu-secret').value, '');
   assert.equal(get('zhihu-panel').hidden, true);
   console.log(JSON.stringify({passed: true, scope: 'UI handlers plus real isolated HTTP; Zhihu responses mocked; no browser rendering', cases: ['empty library', 'manual and JSON import', 'source fidelity', 'reading', 'author scope and citations', 'cards', 'TSV and APKG downloads', 'fact exclusion and validation', 'graph interaction', 'failure clears stale exports', 'pagination and filters', 'keyboard tabs', 'unsafe URL rejected', 'Zhihu credential gating and clearing', 'Zhihu search request and text rendering', 'excerpt import and content-scoped author identity', 'imported button stays disabled', 'Zhihu count validation and upstream error', 'empty search results', 'empty-state entry and mutually exclusive panels', 'compact excerpt disclosure', 'responsive library and return to reading', 'floating chat open close Escape and source gating', 'chat source request and safe cited response', 'chat Enter Shift and IME composition', 'chat history reset and stale response isolation', 'chat close remains usable while busy and duplicate submit blocked']}));
 })().catch(error => { console.error(error); process.exitCode = 1; });

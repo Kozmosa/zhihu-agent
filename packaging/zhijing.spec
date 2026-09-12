@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules, copy_metadata
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 project = Path(SPECPATH).parent
 source = project / "src"
@@ -27,20 +27,26 @@ for folder, extensions in (
             datas.append((str(asset), str(destination)))
 
 # check_environment uses importlib.metadata; frozen code still performs a real dependency check.
-dependencies = ("fastapi", "pydantic", "uvicorn", "httpx", "genanki")
+dependencies = ("fastapi", "pydantic", "uvicorn", "httpx", "genanki", "pywebview", "pythonnet")
 for dependency in dependencies:
     datas.extend(copy_metadata(dependency, recursive=True))
+
+# The contributed webview hook collects its native lib folder; also include injected JS.
+datas.extend(collect_data_files("webview", includes=["js/**/*"]))
 
 a = Analysis(
     [str(project / "desktop.py")],
     pathex=[str(source)],
     binaries=[],
     datas=datas,
-    hiddenimports=list(dependencies) + collect_submodules("uvicorn"),
+    hiddenimports=["fastapi", "pydantic", "uvicorn", "httpx", "genanki", "webview", "clr",
+                   "pythonnet", "clr_loader", "webview.platforms.winforms",
+                   "webview.platforms.edgechromium"] + collect_submodules("uvicorn"),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["pytest", "ruff", "pip", "setuptools", "wheel"],
+    excludes=["pytest", "ruff", "pip", "setuptools", "wheel", "PyQt5", "PyQt6", "PySide2",
+              "PySide6", "qtpy", "gi", "cefpython3"],
     noarchive=False,
     optimize=0,
 )

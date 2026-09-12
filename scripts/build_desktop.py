@@ -60,7 +60,16 @@ def main() -> int:
     if not icon.is_file():
         parser.error("The .ico file is missing; create the desktop assets before building.")
     versions = {}
-    for dependency in ("pyinstaller", "fastapi", "pydantic", "uvicorn", "httpx", "genanki"):
+    for dependency in (
+        "pyinstaller",
+        "fastapi",
+        "pydantic",
+        "uvicorn",
+        "httpx",
+        "genanki",
+        "pywebview",
+        "pythonnet",
+    ):
         try:
             versions[dependency] = version(dependency)
         except PackageNotFoundError:
@@ -120,6 +129,7 @@ def main() -> int:
         "bundled_project_data": False,
         "application_modules_from_selected_project": module_count,
         "note": "Distribute the entire application folder, including _internal.",
+        "system_runtime": "Microsoft Edge WebView2 Runtime and .NET Framework 4.6.2 or later",
     }
     work.mkdir(parents=True, exist_ok=True)
     (work / "build-report.json").write_text(

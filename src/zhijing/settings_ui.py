@@ -76,12 +76,18 @@ def configuration_page(request: Request):
     return render_page(request, "settings.html")
 
 
-def render_page(request: Request, filename: str):
+@router.get("/admin", include_in_schema=False, dependencies=[Depends(guard)])
+def administration_page(request: Request):
+    return render_page(request, "settings.html")
+
+
+def render_page(request: Request, filename: str, *, desktop: bool = False):
     web = Path(__file__).with_name("web")
     template = web.joinpath(filename).read_text("utf-8")
-    widget = web.joinpath("chat.html").read_text("utf-8")
+    widget = "" if desktop else web.joinpath("chat.html").read_text("utf-8")
     # Insert first so shared scripts receive the same nonce as the page and its CSP.
     template = template.replace("__CHAT_WIDGET__", widget)
+    template = template.replace("__DESKTOP__", "true" if desktop else "false")
     return HTMLResponse(
         template.replace("__CONFIG_TOKEN__", request.app.state.config_token),
         headers={
@@ -100,9 +106,20 @@ def workspace_page(request: Request):
     return render_page(request, "workspace.html")
 
 
+@router.get("/desktop", include_in_schema=False, dependencies=[Depends(guard)])
+def desktop_workspace_page(request: Request):
+    return render_page(request, "workspace.html", desktop=True)
+
+
 @router.get("/assets/{filename}", include_in_schema=False, dependencies=[Depends(guard)])
 def workspace_asset(filename: str):
-    if filename not in {"workspace.js", "workspace.css", "chat-widget.js", "chat-widget.css"}:
+    if filename in {"liukanshan-header.png", "liukanshan.png"}:
+        return FileResponse(
+            Path(__file__).with_name("assets") / filename,
+            media_type="image/png",
+            headers={"Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff"},
+        )
+    if filename not in {"workspace.js", "workspace.css", "chat-widget.js", "chat-widget.css", "admin-zhihu.js", "workspace-shell.js"}:
         raise DomainError("asset_not_found", "未找到页面资源。", 404)
     return FileResponse(
         Path(__file__).with_name("web") / filename,

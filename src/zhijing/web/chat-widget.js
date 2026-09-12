@@ -3,7 +3,7 @@
 
   const token = document.currentScript.dataset.configToken;
   const storageKey = 'zhijing.chat.source.' + token;
-  const modes = {extractive: '离线摘录', ollama: 'Ollama 模型', openai: 'API 模型'};
+  const modes = {extractive: '原文摘录', ollama: '资料问答', openai: '资料问答'};
 
   function initialize() {
     const root = document.getElementById('chat-root');
@@ -147,8 +147,8 @@
       const health = await request('/health');
       state.mode = health.model_provider;
       $('chat-mode-notice').textContent = state.mode === 'extractive'
-        ? '离线摘录 · 仅使用已导入内容，无模型请求。'
-        : (modes[state.mode] || state.mode) + ' · 问题和相关资料将发送至已配置模型服务。';
+        ? '根据已导入内容摘录回答，请对照原文理解。'
+        : '问题和相关资料将发送至分析服务，请核对回答中的引用。';
     }
 
     function openChat() {

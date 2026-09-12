@@ -63,13 +63,27 @@ def main() -> int:
 
     os.environ["ZHIJING_DATA_DIR"] = str(default_data_directory(PROJECT_ROOT))
 
-    parser = argparse.ArgumentParser(description="知境桌面悬浮助手：关闭网页后仍可问答")
+    parser = argparse.ArgumentParser(description="知境随身工作台：点击刘看山开始阅读与整理")
     parser.add_argument("--port", type=valid_port, default=8000)
     parser.add_argument("--check", action="store_true", help="检查桌面依赖，不打开窗口")
     parser.add_argument("--check-report", type=Path, help="将 --check 结果写入 JSON 文件")
+    parser.add_argument("--desktop-panel", help=argparse.SUPPRESS)
+    parser.add_argument("--parent-pid", type=int, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.check_report and not args.check:
         parser.error("--check-report 必须与 --check 一起使用")
+    if args.desktop_panel:
+        if not args.parent_pid or args.parent_pid < 1 or args.check:
+            parser.error("工作台窗口必须由桌面助手启动")
+        from zhijing.desktop_panel import run_panel
+
+        try:
+            return run_panel(PROJECT_ROOT, args.port, args.desktop_panel, args.parent_pid)
+        except Exception:
+            # The owning Tk process reports failures; do not create another GUI loop here.
+            return 2
+    if args.parent_pid:
+        parser.error("--parent-pid 仅用于桌面工作台子进程")
     if args.check:
         from zhijing.startup import check_environment
 
@@ -88,6 +102,12 @@ def main() -> int:
                 if FROZEN
                 else "当前 Python 缺少可用 Tkinter/Tcl，请使用项目 Conda 环境。"
             )
+        from zhijing.desktop_panel import check_webview
+
+        report["desktop_panel"] = check_webview()
+        if not report["desktop_panel"]["ready"]:
+            report["ready"] = False
+            report["errors"].extend(report["desktop_panel"]["errors"])
         _write_check_report(report, args.check_report)
         return 0 if report["ready"] else 2
 
