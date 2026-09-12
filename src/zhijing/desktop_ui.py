@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from zhijing.desktop_animation import PetAnimation
 from zhijing.desktop_panel import PanelController
 from zhijing.desktop_service import DesktopServiceError
 
@@ -40,6 +41,12 @@ class DesktopAssistant:
         self.menu.add_command(label="打开知境", command=self.show_chat)
         self.menu.add_command(label="收起", command=self.hide_chat)
         self.menu.add_separator()
+        self._animate = tk.BooleanVar(master=self.root, value=True)
+        self.menu.add_checkbutton(
+            label="桌宠动画", variable=self._animate,
+            command=lambda: self.animation.set_enabled(self._animate.get()),
+        )
+        self.menu.add_separator()
         self.menu.add_command(label="退出", command=self.close)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.bind("<Destroy>", self._on_destroy, add="+")
@@ -56,7 +63,7 @@ class DesktopAssistant:
         return 0, 0, self.root.winfo_screenwidth(), self.root.winfo_screenheight()
 
     def _build_ball(self) -> None:
-        self.ball_size = 64
+        self.ball_size = 72
         transparent = "#FF00FF" if sys.platform == "win32" else "#F7F9FC"
         self.root.configure(bg=transparent)
         if sys.platform == "win32":
@@ -65,31 +72,39 @@ class DesktopAssistant:
         self.root.attributes("-topmost", True)
         self.ball = tk.Canvas(
             self.root,
-            width=64,
-            height=64,
+            width=self.ball_size,
+            height=self.ball_size,
             bg=transparent,
             highlightthickness=0,
             bd=0,
             cursor="hand2",
         )
         self.ball.pack()
-        self.ball.create_image(32, 32, image=self.ball_icon)
+        self.animation = PetAnimation(self.ball, self.ball_icon)
+        self.ball.bind("<Enter>", lambda _event: self.animation.hover(True))
+        self.ball.bind("<Leave>", lambda _event: self.animation.hover(False))
         self.ball.bind("<ButtonPress-1>", self._on_ball_press)
         self.ball.bind("<B1-Motion>", self._on_ball_drag)
         self.ball.bind("<ButtonRelease-1>", self._on_ball_release)
         self.ball.bind("<Button-3>", self._show_menu)
         left, top, right, bottom = self._screen_bounds()
-        self.root.geometry(f"64x64{max(left, right - 92):+d}{max(top, bottom - 92):+d}")
+        self.root.geometry(
+            f"{self.ball_size}x{self.ball_size}"
+            f"{max(left, right - 92):+d}{max(top, bottom - 92):+d}"
+        )
 
     def _show_menu(self, event) -> None:
+        self.animation.hold()
         try:
             self.menu.tk_popup(event.x_root, event.y_root)
         finally:
             self.menu.grab_release()
+            self.animation.release()
 
     def _on_ball_press(self, event) -> None:
         self._drag = (event.x_root, event.y_root, self.root.winfo_x(), self.root.winfo_y())
         self._dragged = False
+        self.animation.hold()
 
     def _on_ball_drag(self, event) -> None:
         if self._drag is None:
@@ -102,12 +117,14 @@ class DesktopAssistant:
             left, top, right, bottom = self._screen_bounds()
             x = min(max(ball_x + dx, left), right - self.ball_size)
             y = min(max(ball_y + dy, top), bottom - self.ball_size)
-            self.root.geometry(f"64x64{x:+d}{y:+d}")
+            self.root.geometry(f"{self.ball_size}x{self.ball_size}{x:+d}{y:+d}")
 
     def _on_ball_release(self, _event) -> None:
-        if self._drag is not None and not self._dragged:
-            self.toggle_chat()
+        clicked = self._drag is not None and not self._dragged
         self._drag = None
+        self.animation.release(clicked=clicked)
+        if clicked:
+            self.toggle_chat()
 
     def _start_service(self) -> None:
         if self._starting or self._closed:
@@ -181,12 +198,14 @@ class DesktopAssistant:
     def _on_destroy(self, event) -> None:
         if event.widget is self.root and not self._closed:
             self._closed = True
+            self.animation.close()
             self.panel.shutdown()
 
     def close(self) -> None:
         if self._closed:
             return
         self._closed = True
+        self.animation.close()
         self.panel.shutdown()
         self.root.destroy()
 

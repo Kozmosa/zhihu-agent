@@ -10,3 +10,7 @@ Character artwork: 刘看山 (Liu Kanshan), Zhihu mascot.
 `liukanshan.png` preserves the original 470 × 580 transparent PNG. Small PNG variants and the Windows ICO adapt its dimensions for UI display without changing the character artwork. The character remains attributed to Zhihu; this project does not claim authorship or official affiliation.
 
 Original SHA-256: a5fa82d9dc230047cf9007a44094a53fbc4e40d8effe0f6909367cbcb0fad9df
+
+The desktop pet animates the unchanged small PNG with Canvas positioning, a temporary
+eyelid overlay and a hover accent. These UI effects are added by this project, not
+official animated artwork from Zhihu.
