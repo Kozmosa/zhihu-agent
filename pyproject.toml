@@ -16,7 +16,7 @@ dev = ["pytest>=8,<10", "ruff>=0.12,<1"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-zhijing = ["web/*.html", "web/*.js", "web/*.css"]
+zhijing = ["web/*.html", "web/*.js", "web/*.css", "assets/*.png", "assets/*.ico", "assets/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
