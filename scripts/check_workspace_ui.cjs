@@ -20,6 +20,13 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
     }
     set id(value) { this._id = value; nodes.set(value, this); }
     get id() { return this._id; }
+    contains(node) { return node === this || this.children.some(child => child.contains(node)); }
+    closest(selector) {
+      for(let node = this; node; node = node.parentNode) {
+        if(selector.startsWith('#') && node.id === selector.slice(1)) return node;
+      }
+      return null;
+    }
     addEventListener(name, callback) { this.events[name] = callback; }
     setAttribute(name, value) { this.attributes[name] = value; if(name === 'class') this.className = value; }
     removeAttribute(name) { delete this.attributes[name]; delete this[name]; }
@@ -35,7 +42,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
         child.parentNode = this; child.register(); this.children.push(child);
       }
     }
-    focus(options) { this.focused = true; this.focusOptions = options; }
+    focus(options) { this.focused = true; this.focusOptions = options; document.activeElement = this; }
     scrollIntoView(options) { this.scrollOptions = options; }
     remove() {
       if(this.parentNode) this.parentNode.children = this.parentNode.children.filter(node => node !== this);
@@ -70,34 +77,50 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   }
   assert.equal(nodes.get('chat-empty').parentNode, nodes.get('chat-messages'), 'Fixture must model the real nested chat empty state');
   const requests = [], downloads = [], failures = new Map(), fixtures = new Map(), delays = new Map();
+  let inFlight = 0;
+  const stored = new Map();
+  const sessionStorage = {getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, String(value)), removeItem: key => stored.delete(key)};
   class LocalURL extends URL {
     static createObjectURL(blob) { downloads.push(blob); return 'blob:fixture'; }
     static revokeObjectURL() {}
   }
   const body = new Element('body');
   const document = {
-    events: {}, addEventListener(name, callback) { this.events[name] = callback; },
+    events: {}, listeners: {},
+    addEventListener(name, callback) {
+      (this.listeners[name] ??= []).push(callback);
+      this.events[name] = event => this.listeners[name].forEach(listener => listener(event));
+    },
+    dispatchEvent(event) { this.events[event.type]?.(event); return true; },
     currentScript: {dataset: {configToken: html.match(/data-config-token="([^"]+)"/)[1]}}, body,
     getElementById: id => { assert(nodes.has(id), 'Missing element ' + id); return nodes.get(id); },
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag),
     querySelectorAll: selector => created.filter(node => selector === 'button' ? node.tagName === 'button' : node.className.split(' ').includes(selector.slice(1))),
   };
-  const sandbox = {document, location: {hash: '#cards'}, URL: LocalURL, URLSearchParams, setTimeout: fn => fn(), fetch: async (url, options) => {
+  const sandbox = {document, sessionStorage, CustomEvent: class { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } }, location: {hash: '#cards'}, URL: LocalURL, URLSearchParams, setTimeout: fn => fn(), fetch: async (url, options) => {
     requests.push({url, options});
+    inFlight++;
+    try {
     if (delays.has(url)) await delays.get(url);
     if (failures.has(url)) return {ok: false, json: async () => ({error: {message: failures.get(url)}})};
     if (fixtures.has(url)) return {ok: true, json: async () => fixtures.get(url)};
-    return fetch(new URL(url, base), options);
+    return await fetch(new URL(url, base), options);
+    } finally { inFlight--; }
   }};
   vm.createContext(sandbox);
   const script = await fetch(base + '/assets/workspace.js');
   assert.equal(script.status, 200);
   vm.runInContext(await script.text(), sandbox);
+  const widgetScript = await fetch(base + '/assets/chat-widget.js');
+  assert.equal(widgetScript.status, 200);
+  vm.runInContext(await widgetScript.text(), sandbox);
   const busy = () => vm.runInContext('state.busy', sandbox);
   async function idle() {
     const until = Date.now() + 15000;
-    while(busy() && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 10));
+    do { await new Promise(resolve => setTimeout(resolve, 10)); }
+    while((busy() || inFlight) && Date.now() < until);
     assert.equal(busy(), false, 'UI did not finish');
+    assert.equal(inFlight, 0, 'Widget requests did not finish');
   }
   const get = id => nodes.get(id);
   const submit = async id => { await get(id).events.submit({preventDefault() {}}); await idle(); };
@@ -133,8 +156,10 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.equal(get('chat-window').hidden, true);
   await click('chat-launcher');
   await click('chat-pick-source');
-  assert.equal(get('chat-window').hidden, true);
-  assert.equal(get('zhihu-panel').hidden, false);
+  assert.equal(get('chat-window').hidden, false);
+  assert.equal(get('chat-source-picker').open, true);
+  assert.equal(get('chat-source-select').focused, true);
+  await click('chat-close');
   await click('empty-import');
   assert.equal(get('import-panel').hidden, false);
   assert.equal(get('zhihu-panel').hidden, true);
@@ -155,6 +180,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.equal(get('selected-text').textContent, original);
   assert.equal(get('run-reading').disabled, false);
   const primaryId = vm.runInContext('state.selected.id', sandbox);
+  assert.deepEqual([...stored.values()], [primaryId], 'Only the selected source ID may be stored');
   assert.equal(get('selected-title').textContent, get('import-title').value);
   assert.equal(get('source-preview-label').textContent, '查看已导入内容');
   assert.equal(get('workspace-empty').hidden, true);
@@ -219,7 +245,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   fixtures.set('/api/v1/author/ask', {answer: 'Stale source answer must be discarded', mode: 'extractive', identity_notice: 'Fixture', citations: []});
   get('chat-question').value = 'Deferred source question';
   const pendingChat = get('chat-form').events.submit({preventDefault() {}});
-  assert.equal(busy(), true);
+  assert.equal(busy(), false, 'Shared chat must not make the workspace busy');
   assert.equal(get('chat-send').disabled, true);
   assert.equal(get('chat-close').disabled, false);
   assert.equal(get('chat-launcher').disabled, false);
@@ -245,6 +271,28 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   fixtures.delete('/api/v1/author/ask'); delays.delete('/api/v1/author/ask');
   vm.runInContext('select(fixturePrimary)', sandbox);
   await click('chat-close');
+
+  // Global chat can change the source while a workspace capability is in flight.
+  // Returning A -> B -> A must still discard both old successes and old errors.
+  for(const staleError of [false, true]) {
+    let releaseReading;
+    const readingPath = '/api/v1/reading/analyze';
+    delays.set(readingPath, new Promise(resolve => { releaseReading = resolve; }));
+    if(staleError) failures.set(readingPath, 'Stale reading error must be discarded');
+    else fixtures.set(readingPath, {summary: 'Stale reading result must be discarded', sections: [], mode: 'extractive', notice: 'Fixture'});
+    const beforeReading = requests.filter(row => row.url === readingPath).length;
+    const pendingReading = get('reading-form').events.submit({preventDefault() {}});
+    const untilReading = Date.now() + 5000;
+    while(requests.filter(row => row.url === readingPath).length === beforeReading && Date.now() < untilReading) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(requests.filter(row => row.url === readingPath).length, beforeReading + 1);
+    document.dispatchEvent(new sandbox.CustomEvent('zhijing:chat-source-selected', {detail: otherChatSource}));
+    document.dispatchEvent(new sandbox.CustomEvent('zhijing:chat-source-selected', {detail: primary}));
+    assert.equal(vm.runInContext('state.selected.id', sandbox), primaryId);
+    releaseReading(); await pendingReading; await idle();
+    assert.equal(get('reading-result').children.length, 0, 'A -> B -> A must discard an old capability result');
+    assert.equal(get('reading-status').textContent, '', 'Old-source errors must not enter the current pane');
+    delays.delete(readingPath); fixtures.delete(readingPath); failures.delete(readingPath);
+  }
 
   await submit('cards-form');
   assert.match(get('cards-status').className, /success/);
@@ -288,6 +336,19 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.match(allText(get('source-list')), /没有资料/);
   assert.equal(get('next-page').disabled, true);
   assert.equal(get('prev-page').disabled, true);
+  await click('chat-source-refresh');
+  assert.equal(get('chat-source-prev').disabled, true);
+  assert.equal(get('chat-source-next').disabled, false);
+  await click('chat-source-next');
+  assert.equal(get('chat-source-page').textContent, '第 2 页');
+  assert(requests.some(row => row.url === '/api/v1/sources?offset=20&limit=21'));
+  const widgetSourceId = get('chat-source-select').children.at(-1).value;
+  assert(widgetSourceId);
+  get('chat-source-select').value = widgetSourceId;
+  await get('chat-source-select').events.change(); await idle();
+  assert.equal(vm.runInContext('state.selected.id', sandbox), widgetSourceId, 'Widget selection must update the workspace');
+  assert.deepEqual([...stored.values()], [widgetSourceId], 'Shared widget storage must contain only one source ID');
+  assert.equal(get('chat-source-picker').open, false);
   await click('tab-author'); assert.equal(get('pane-author').hidden, false);
   assert.equal(get('pane-reading').hidden, true);
   get('tab-author').events.keydown({key: 'ArrowRight', preventDefault() {}});

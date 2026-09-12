@@ -1,6 +1,7 @@
 import json
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -220,3 +221,90 @@ def test_compatible_api_runs_all_five_capabilities(setup_api, task):
     body = json.loads(state["calls"][-1].content)
     assert body["response_format"] == {"type": "json_object"}
     assert body["stream"] is False
+
+
+class PageElements(HTMLParser):
+    def __init__(self, content):
+        super().__init__()
+        self.elements = []
+        self.feed(content)
+
+    def handle_starttag(self, tag, attrs):
+        self.elements.append((tag, dict(attrs)))
+
+
+@pytest.mark.parametrize("path", ["/", "/workspace"])
+def test_product_pages_share_one_chat_widget_and_session_nonce(setup_api, path):
+    client, state = setup_api
+    response = client.get(path)
+    assert response.status_code == 200
+    assert "__CHAT_WIDGET__" not in response.text and "__CONFIG_TOKEN__" not in response.text
+    elements = PageElements(response.text).elements
+    identifiers = [attrs["id"] for _, attrs in elements if "id" in attrs]
+    for identifier in ["chat-launcher", "chat-window", "chat-form", "chat-question", "chat-send"]:
+        assert identifiers.count(identifier) == 1
+    scripts = [attrs for tag, attrs in elements if tag == "script"]
+    assert len([attrs for attrs in scripts if attrs.get("src") == "/assets/chat-widget.js"]) == 1
+    assert (
+        len(
+            [
+                attrs
+                for tag, attrs in elements
+                if tag == "link" and attrs.get("href") == "/assets/chat-widget.css"
+            ]
+        )
+        == 1
+    )
+    token = client.app.state.config_token
+    assert scripts and all(attrs.get("nonce") == token for attrs in scripts)
+    widget_script = next(attrs for attrs in scripts if attrs.get("src") == "/assets/chat-widget.js")
+    assert widget_script.get("data-config-token") == token
+    policy = response.headers["content-security-policy"]
+    assert "script-src 'nonce-" + token + "'" in policy
+    assert "connect-src 'self'" in policy and "frame-ancestors 'none'" in policy
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert state["calls"] == []
+
+
+@pytest.mark.parametrize(
+    "name,media", [("chat-widget.js", "text/javascript"), ("chat-widget.css", "text/css")]
+)
+def test_shared_chat_assets_are_served_with_existing_security_headers(setup_api, name, media):
+    client, state = setup_api
+    response = client.get("/assets/" + name)
+    assert response.status_code == 200 and response.content
+    assert response.headers["content-type"].startswith(media)
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert state["calls"] == []
+
+
+@pytest.mark.parametrize(
+    "path", ["/", "/workspace", "/assets/chat-widget.js", "/assets/chat-widget.css"]
+)
+def test_shared_chat_pages_and_assets_reject_untrusted_origin(setup_api, path):
+    client, state = setup_api
+    response = client.get(path, headers={"Origin": "https://evil.test"})
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "invalid_origin"
+    assert client.app.state.config_token not in response.text
+    assert state["calls"] == []
+
+
+def test_shared_chat_assets_and_workspace_reject_nonlocal_clients(tmp_path):
+    with TestClient(create_app(Settings(data_dir=tmp_path)), client=("192.0.2.3", 12345)) as client:
+        for path in ["/", "/workspace", "/assets/chat-widget.js", "/assets/chat-widget.css"]:
+            response = client.get(path)
+            assert response.status_code == 403
+            assert response.json()["error"]["code"] == "local_only"
+            assert client.app.state.config_token not in response.text
+
+
+@pytest.mark.parametrize("filename", ["chat.html", "settings.html", "unknown.js"])
+def test_shared_chat_does_not_expand_asset_access_to_templates(setup_api, filename):
+    client, _ = setup_api
+    response = client.get("/assets/" + filename)
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "asset_not_found"

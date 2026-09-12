@@ -4,7 +4,7 @@ const token = document.currentScript.dataset.configToken;
 const $ = id => document.getElementById(id);
 const modes = {extractive: '离线摘录', ollama: 'Ollama 模型', openai: 'API 模型'};
 const tasks = ['reading', 'author', 'cards', 'facts', 'knowledge'];
-const state = {selected: null, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive', zhihuConfigured: false, zhihuResults: [], chatSourceId: null, chatRevision: 0, chatMessageCount: 0};
+const state = {selected: null, selectionRevision: 0, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive', zhihuConfigured: false, zhihuResults: []};
 const pageSize = 20;
 const mobileLayout = globalThis.matchMedia?.('(max-width: 720px)');
 
@@ -54,15 +54,14 @@ function status(id, text, kind = '') {
 }
 
 function controls() {
-  document.querySelectorAll('button').forEach(button => { button.disabled = state.busy; });
+  const chatRoot = document.getElementById('chat-root');
+  document.querySelectorAll('button').forEach(button => { if (!chatRoot?.contains(button)) button.disabled = state.busy; });
   document.querySelectorAll('.requires-source').forEach(button => { button.disabled = state.busy || !state.selected; });
   $('prev-page').disabled = state.busy || state.page === 0;
   $('next-page').disabled = state.busy || !state.more;
   $('export-tsv').disabled = $('export-apkg').disabled = state.busy || !state.cards.length;
   $('run-zhihu-search').disabled = state.busy || !state.zhihuConfigured;
   $('clear-zhihu-secret').disabled = state.busy || !state.zhihuConfigured;
-  $('chat-send').disabled = state.busy || !state.selected;
-  $('chat-launcher').disabled = $('chat-close').disabled = false;
   state.zhihuResults.forEach(result => { result.button.disabled = state.busy || result.imported; });
 }
 
@@ -133,90 +132,9 @@ function safeLink(node, value) {
   } catch { /* Keep invalid links hidden. */ }
 }
 
-function updateChatContext() {
-  const source = state.selected;
-  if (state.chatSourceId !== (source?.id ?? null)) {
-    state.chatSourceId = source?.id ?? null;
-    state.chatRevision += 1;
-    // The empty-state controls live inside the log and must survive source changes.
-    const empty = $('chat-empty');
-    $('chat-messages').replaceChildren(empty);
-    state.chatMessageCount = 0;
-    $('chat-question').value = '';
-    status('chat-status', '');
-  }
-  $('chat-context').textContent = source
-    ? (source.content_extent === 'excerpt' ? '仅依据摘要 · ' : '当前资料 · ') + source.title
-    : '请先选择一篇资料，再开始问答。';
-  $('chat-context').title = source
-    ? source.title + (source.content_extent === 'excerpt' ? '：仅依据已导入摘要回答，不包含完整正文。' : '：依据已导入资料回答。')
-    : '请先选择一篇资料，再开始问答。';
-  $('chat-empty').hidden = state.chatMessageCount > 0;
-  $('chat-pick-source').hidden = Boolean(source);
-  controls();
-}
-
-function openChat() {
-  updateChatContext();
-  $('chat-window').hidden = false;
-  $('chat-launcher').setAttribute('aria-expanded', 'true');
-  $('chat-question').focus({preventScroll: true});
-}
-
-function closeChat() {
-  $('chat-window').hidden = true;
-  $('chat-launcher').setAttribute('aria-expanded', 'false');
-  $('chat-launcher').focus({preventScroll: true});
-}
-
-function chatMessage(role, text) {
-  const article = element('article', undefined, 'chat-message ' + role);
-  article.append(element('div', text, 'chat-message-body'));
-  $('chat-messages').append(article);
-  state.chatMessageCount += 1;
-  $('chat-empty').hidden = true;
-  return article;
-}
-
-function scrollChat() {
-  $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
-}
-
-function submitChat() {
-  return job('chat-status', '正在根据资料回答…', async () => {
-    if (!state.selected) throw new Error('请先在资料库选择一篇资料，再开始问答。');
-    const source = state.selected, revision = state.chatRevision;
-    const question = $('chat-question').value.trim();
-    if (!question || question.length > 2000) throw new Error('请填写 1 至 2,000 字符的问题。');
-    chatMessage('user', question);
-    $('chat-question').value = '';
-    scrollChat();
-    let result;
-    try {
-      await refreshMode();
-      if (state.chatRevision !== revision || state.selected?.id !== source.id) return;
-      result = await request('/api/v1/author/ask', {author_id: source.author_id, primary_source_id: source.id, question});
-    } catch (error) {
-      // A response or error from a previous source must never enter the new conversation.
-      if (state.chatRevision !== revision || state.selected?.id !== source.id) return;
-      if (!$('chat-question').value) $('chat-question').value = question;
-      throw error;
-    }
-    if (state.chatRevision !== revision || state.selected?.id !== source.id) return;
-    const answer = chatMessage('assistant', result.answer);
-    answer.append(element('div', (modes[result.mode] || result.mode) + ' · ' + (result.identity_notice || '助手根据资料回答，不代表作者本人。'), 'chat-message-meta'));
-    const references = element('details', undefined, 'chat-citations');
-    references.append(element('summary', '查看引用'));
-    citations(references, result.citations);
-    if (result.citation_notice) references.append(element('p', result.citation_notice, 'chat-message-meta'));
-    answer.append(references);
-    status('chat-status', '回答完成。');
-    scrollChat();
-  });
-}
-
-function select(source) {
+function select(source, notifyChat = true) {
   state.selected = source;
+  state.selectionRevision += 1;
   state.cards = [];
   $('workspace-empty').hidden = true;
   $('selected-title').textContent = source.title;
@@ -233,8 +151,8 @@ function select(source) {
   safeLink($('selected-url'), source.url);
   for (const task of tasks) { $(task + '-result').replaceChildren(); status(task + '-status', ''); }
   renderSources();
-  updateChatContext();
   controls();
+  if (notifyChat) document.dispatchEvent(new CustomEvent('zhijing:source-selected', {detail: source}));
   if (isSmallScreen()) {
     $('library-drawer').open = false;
     $('zhihu-panel').hidden = true;
@@ -439,8 +357,17 @@ async function runTask(task, work) {
   return job(task + '-status', '正在处理，请稍候…', async () => {
     $(task + '-result').replaceChildren();
     if (task === 'cards') state.cards = [];
-    await refreshMode();
-    const result = await work();
+    const revision = state.selectionRevision;
+    let result;
+    try {
+      await refreshMode();
+      if (state.selectionRevision !== revision) return;
+      result = await work();
+    } catch (error) {
+      if (state.selectionRevision !== revision) return;
+      throw error;
+    }
+    if (state.selectionRevision !== revision) return;
     ({reading: renderReading, author: renderAnswer, cards: renderCards, facts: renderFacts, knowledge: renderGraph})[task](result);
     let extra = task === 'cards' ? result.notice : '';
     if (task === 'knowledge') extra = `${result.nodes.length} 个节点 · ${result.edges.length} 条关系 · 范围内 ${result.total_sources} 篇资料` + (result.truncated ? '\n本次仅使用数量上限内的资料，未覆盖整个范围。' : '');
@@ -537,26 +464,9 @@ $('empty-import').addEventListener('click', openImportPanel);
 $('close-import').addEventListener('click', () => { $('import-panel').hidden = true; });
 $('open-zhihu').addEventListener('click', openZhihuPanel);
 $('empty-search').addEventListener('click', openZhihuPanel);
-$('chat-launcher').addEventListener('click', () => { if ($('chat-window').hidden) openChat(); else closeChat(); });
-$('chat-close').addEventListener('click', closeChat);
-$('chat-form').addEventListener('submit', event => { event.preventDefault(); return submitChat(); });
-$('chat-question').addEventListener('keydown', event => {
-  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
-    event.preventDefault();
-    return submitChat();
-  }
-});
-document.addEventListener?.('keydown', event => {
-  if (event.key === 'Escape' && !$('chat-window').hidden) { event.preventDefault(); closeChat(); }
-});
-$('chat-pick-source').addEventListener('click', () => {
-  closeChat();
-  if (state.sources.length) {
-    $('library-drawer').open = true;
-    $('library-drawer').scrollIntoView?.({block: 'start'});
-    return;
-  }
-  return openZhihuPanel();
+document.addEventListener('zhijing:chat-source-selected', event => {
+  const source = event.detail;
+  if (source?.id && source.id !== state.selected?.id) select(source, false);
 });
 $('close-zhihu').addEventListener('click', () => { $('zhihu-panel').hidden = true; $('zhihu-secret').value = ''; });
 $('zhihu-config-form').addEventListener('submit', event => {
@@ -643,5 +553,4 @@ const requestedTask = globalThis.location?.hash.slice(1);
 if (tasks.includes(requestedTask)) tab(requestedTask);
 syncLibraryDrawer();
 mobileLayout?.addEventListener?.('change', syncLibraryDrawer);
-updateChatContext();
 job('library-status', '正在读取资料库…', async () => { await refreshMode(); await loadSources(); });
