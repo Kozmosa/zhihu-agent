@@ -77,7 +77,11 @@ def configuration_page(request: Request):
 
 
 def render_page(request: Request, filename: str):
-    template = Path(__file__).with_name("web").joinpath(filename).read_text("utf-8")
+    web = Path(__file__).with_name("web")
+    template = web.joinpath(filename).read_text("utf-8")
+    widget = web.joinpath("chat.html").read_text("utf-8")
+    # Insert first so shared scripts receive the same nonce as the page and its CSP.
+    template = template.replace("__CHAT_WIDGET__", widget)
     return HTMLResponse(
         template.replace("__CONFIG_TOKEN__", request.app.state.config_token),
         headers={
@@ -98,7 +102,7 @@ def workspace_page(request: Request):
 
 @router.get("/assets/{filename}", include_in_schema=False, dependencies=[Depends(guard)])
 def workspace_asset(filename: str):
-    if filename not in {"workspace.js", "workspace.css"}:
+    if filename not in {"workspace.js", "workspace.css", "chat-widget.js", "chat-widget.css"}:
         raise DomainError("asset_not_found", "未找到页面资源。", 404)
     return FileResponse(
         Path(__file__).with_name("web") / filename,
