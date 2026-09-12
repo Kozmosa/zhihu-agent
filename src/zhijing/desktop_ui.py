@@ -1,4 +1,4 @@
-"""The mascot owns Tk; the workbench runs in a separate WebView process."""
+"""The mascot owns Tk; the compact assistant uses a separate WebView process."""
 
 from __future__ import annotations
 
@@ -119,7 +119,11 @@ class DesktopAssistant:
                 self.service.ensure_running()
                 with httpx.Client(trust_env=False, follow_redirects=False, timeout=10) as client:
                     response = client.get(self.service.base_url + "/desktop")
-                if response.status_code != 200 or 'data-desktop="true"' not in response.text:
+                if (
+                    response.status_code != 200
+                    or 'data-desktop="true"' not in response.text
+                    or 'data-surface="companion"' not in response.text
+                ):
                     self._events.put(
                         (False, "当前运行的是旧版知境，请退出旧版后重新打开桌面助手。")
                     )
@@ -139,7 +143,7 @@ class DesktopAssistant:
             try:
                 self.panel.show()
             except Exception:
-                messagebox.showerror("知境", "工作台打开失败，请重新打开知境。", parent=self.root)
+                messagebox.showerror("知境", "随身助手打开失败，请重新打开知境。", parent=self.root)
         else:
             self._start_service()
 
@@ -155,7 +159,7 @@ class DesktopAssistant:
             try:
                 self.panel.toggle()
             except Exception:
-                messagebox.showerror("知境", "工作台打开失败，请重新打开知境。", parent=self.root)
+                messagebox.showerror("知境", "随身助手打开失败，请重新打开知境。", parent=self.root)
 
     def _drain_events(self) -> None:
         if self._closed:

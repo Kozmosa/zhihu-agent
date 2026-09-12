@@ -1,4 +1,4 @@
-"""Windows WebView workbench with a private, owned parent/child lifecycle."""
+"""Compact Windows companion with a private, owned parent/child lifecycle."""
 
 from __future__ import annotations
 
@@ -143,9 +143,7 @@ class PanelController:
         timeout = not self.events.is_set("ready") and time.monotonic() - self.started_at > 45
         if exited or timeout:
             self.shutdown()
-            return (
-                "工作台未能启动。请确认 Microsoft Edge WebView2 Runtime 已安装，再点击刘看山重试。"
-            )
+            return "随身助手未能启动。请确认 Microsoft Edge WebView2 Runtime 已安装，再点击刘看山重试。"
         return None
 
     def shutdown(self) -> None:
@@ -179,7 +177,7 @@ def check_webview() -> dict:
         report["renderer"] = edgechromium.renderer
     except Exception:
         report["ready"] = False
-        report["errors"].append("桌面工作台组件不可用，请重新解压完整软件包或安装 desktop 依赖。")
+        report["errors"].append("随身助手组件不可用，请重新解压完整软件包或安装 desktop 依赖。")
         return report
     import winreg
 
@@ -206,19 +204,27 @@ def check_webview() -> dict:
     return report
 
 
+def _fit_panel_geometry(bounds: tuple[int, int, int, int]) -> dict:
+    left, top, right, bottom = bounds
+    work_width, work_height = max(1, right - left), max(1, bottom - top)
+    margin = min(24, (min(work_width, work_height) - 1) // 2)
+    width = min(480, work_width - 2 * margin)
+    height = min(700, work_height - 2 * margin)
+    return {
+        "width": width,
+        "height": height,
+        "min_size": (min(380, width), min(520, height)),
+        # Leave room for the mascot at its initial position on the right.
+        "x": max(left + margin, right - width - 100),
+        "y": bottom - height - margin,
+    }
+
+
 def panel_geometry() -> dict:
     rect = wintypes.RECT()
     if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0):
-        width = max(320, min(1060, rect.right - rect.left - 32))
-        height = max(240, min(780, rect.bottom - rect.top - 32))
-        return {
-            "width": width,
-            "height": height,
-            "min_size": (min(760, width), min(600, height)),
-            "x": rect.left + (rect.right - rect.left - width) // 2,
-            "y": rect.top + (rect.bottom - rect.top - height) // 2,
-        }
-    return {"width": 1060, "height": 780, "min_size": (760, 600)}
+        return _fit_panel_geometry((rect.left, rect.top, rect.right, rect.bottom))
+    return {"width": 480, "height": 700, "min_size": (380, 520)}
 
 
 def run_panel(project_root: Path, port: int, session: str, parent_pid: int) -> int:
@@ -239,7 +245,7 @@ def run_panel(project_root: Path, port: int, session: str, parent_pid: int) -> i
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
     webview.settings["ALLOW_FILE_URLS"] = False
     window = webview.create_window(
-        "知境 · 随身工作台",
+        "知境 · 随身助手",
         f"http://127.0.0.1:{port}/desktop",
         resizable=True,
         on_top=True,

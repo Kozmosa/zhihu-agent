@@ -63,7 +63,7 @@ def main() -> int:
 
     os.environ["ZHIJING_DATA_DIR"] = str(default_data_directory(PROJECT_ROOT))
 
-    parser = argparse.ArgumentParser(description="知境随身工作台：点击刘看山开始阅读与整理")
+    parser = argparse.ArgumentParser(description="知境随身助手：点击刘看山开始阅读与整理")
     parser.add_argument("--port", type=valid_port, default=8000)
     parser.add_argument("--check", action="store_true", help="检查桌面依赖，不打开窗口")
     parser.add_argument("--check-report", type=Path, help="将 --check 结果写入 JSON 文件")
@@ -74,7 +74,7 @@ def main() -> int:
         parser.error("--check-report 必须与 --check 一起使用")
     if args.desktop_panel:
         if not args.parent_pid or args.parent_pid < 1 or args.check:
-            parser.error("工作台窗口必须由桌面助手启动")
+            parser.error("随身助手窗口必须由桌面图标启动")
         from zhijing.desktop_panel import run_panel
 
         try:
@@ -83,7 +83,7 @@ def main() -> int:
             # The owning Tk process reports failures; do not create another GUI loop here.
             return 2
     if args.parent_pid:
-        parser.error("--parent-pid 仅用于桌面工作台子进程")
+        parser.error("--parent-pid 仅用于随身助手子进程")
     if args.check:
         from zhijing.startup import check_environment
 

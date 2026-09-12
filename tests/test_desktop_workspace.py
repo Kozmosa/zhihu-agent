@@ -1,4 +1,4 @@
-"""The desktop workspace exposes user capabilities without configuration controls."""
+"""The compact companion has its own page while the full workspace stays available."""
 
 from html.parser import HTMLParser
 
@@ -29,11 +29,23 @@ def test_desktop_page_exposes_five_capabilities_without_admin_credentials(tmp_pa
         assert response.headers["cache-control"] == "no-store"
         page = PageElements(response.text)
         ids = [attributes["id"] for _, attributes in page.elements if "id" in attributes]
-        assert len(ids) == len(set(ids)), "Duplicate IDs break shared workspace handlers"
-        assert any("data-desktop" in attributes for _, attributes in page.elements)
+        assert len(ids) == len(set(ids)), "Duplicate IDs break companion controls"
+        assert any(
+            tag == "body"
+            and attributes.get("data-desktop") == "true"
+            and attributes.get("data-surface") == "companion"
+            for tag, attributes in page.elements
+        )
         for capability in ("reading", "author", "cards", "facts", "knowledge"):
-            assert {f"tab-{capability}", f"{capability}-form", f"{capability}-result"} <= set(ids)
-        assert {"source-list", "import-form", "export-tsv", "export-apkg"} <= set(ids)
+            assert {
+                f"tool-tab-{capability}",
+                f"tool-pane-{capability}",
+                f"tool-form-{capability}",
+                f"tool-run-{capability}",
+                f"tool-result-{capability}",
+            } <= set(ids)
+        assert {"companion-root", "companion-source", "companion-import-form"} <= set(ids)
+        assert not {"source-list", "import-form", "chat-root"} & set(ids)
         assert not {"zhihu-secret", "zhihu-config-form", "clear-zhihu-secret"} & set(ids)
         assert not any(
             tag == "input" and attributes.get("type") == "password"
@@ -50,12 +62,35 @@ def test_desktop_page_exposes_five_capabilities_without_admin_credentials(tmp_pa
                 assets.append(attributes["src"])
             if tag == "link" and attributes.get("rel") == "stylesheet":
                 assets.append(attributes["href"])
-        assert "/assets/workspace.js" in assets
+        assert {"/assets/companion.js", "/assets/companion.css"} <= set(assets)
+        assert not {
+            "/assets/workspace.js",
+            "/assets/workspace.css",
+            "/assets/workspace-shell.js",
+        } & set(assets)
         for asset in assets:
             assert asset.startswith("/assets/"), "Desktop resources must be self-contained"
             resource = client.get(asset)
             assert resource.status_code == 200, asset
             assert resource.headers["x-content-type-options"] == "nosniff"
+
+
+def test_full_workspace_keeps_its_own_surface_and_assets(tmp_path):
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("127.0.0.1", 12345),
+    ) as client:
+        response = client.get("/workspace")
+        assert response.status_code == 200
+        page = PageElements(response.text)
+        ids = {attributes["id"] for _, attributes in page.elements if "id" in attributes}
+        assert {"source-list", "import-form", "chat-root"} <= ids
+        assert "companion-root" not in ids
+        assert "/assets/workspace.js" in response.text
+        assert "/assets/workspace.css" in response.text
+        assert "/assets/companion.js" not in response.text
+        assert "/assets/companion.css" not in response.text
 
 
 def test_desktop_page_keeps_local_origin_and_host_boundary(tmp_path):
@@ -64,9 +99,11 @@ def test_desktop_page_keeps_local_origin_and_host_boundary(tmp_path):
         base_url="http://127.0.0.1",
         client=("127.0.0.1", 12345),
     ) as client:
-        assert client.get("/desktop", headers={"Origin": "https://outside.test"}).status_code == 403
-        assert client.get("/desktop", headers={"Host": "outside.test"}).status_code == 400
+        for path in ("/desktop", "/assets/companion.js", "/assets/companion.css"):
+            assert client.get(path, headers={"Origin": "https://outside.test"}).status_code == 403
+            assert client.get(path, headers={"Host": "outside.test"}).status_code == 400
     with TestClient(
         create_app(Settings(data_dir=tmp_path)), client=("192.0.2.20", 12345)
     ) as client:
-        assert client.get("/desktop").status_code == 403
+        for path in ("/desktop", "/assets/companion.js", "/assets/companion.css"):
+            assert client.get(path).status_code == 403
