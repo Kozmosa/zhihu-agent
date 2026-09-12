@@ -8,10 +8,11 @@ import sys
 from contextlib import contextmanager
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+FROZEN = bool(getattr(sys, "frozen", False))
+PROJECT_ROOT = Path(sys.executable if FROZEN else __file__).resolve().parent
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-os.environ.setdefault("ZHIJING_DATA_DIR", str(PROJECT_ROOT / "data"))
+if not FROZEN:
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 
 @contextmanager
@@ -39,25 +40,55 @@ def single_instance(port: int):
         kernel.CloseHandle(handle)
 
 
+def _write_check_report(report: dict, destination: Path | None) -> None:
+    if destination is None and sys.stdout is None:
+        from zhijing.desktop_paths import user_state_directory
+
+        destination = user_state_directory() / "diagnostics" / "desktop-check.json"
+    if destination is not None:
+        destination = destination.resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        report["check_report"] = str(destination)
+        destination.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", "utf-8")
+    if sys.stdout is not None:
+        try:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        except UnicodeEncodeError:
+            print(json.dumps(report, ensure_ascii=True, indent=2))
+
+
 def main() -> int:
     from zhijing.cli import valid_port
+    from zhijing.desktop_paths import default_data_directory
+
+    os.environ["ZHIJING_DATA_DIR"] = str(default_data_directory(PROJECT_ROOT))
 
     parser = argparse.ArgumentParser(description="知境桌面悬浮助手：关闭网页后仍可问答")
     parser.add_argument("--port", type=valid_port, default=8000)
     parser.add_argument("--check", action="store_true", help="检查桌面依赖，不打开窗口")
+    parser.add_argument("--check-report", type=Path, help="将 --check 结果写入 JSON 文件")
     args = parser.parse_args()
+    if args.check_report and not args.check:
+        parser.error("--check-report 必须与 --check 一起使用")
     if args.check:
         from zhijing.startup import check_environment
 
         report = check_environment()
+        report["frozen"] = FROZEN
+        report["application_root"] = str(PROJECT_ROOT)
         try:
             import tkinter
 
             report["tk_version"] = tkinter.TkVersion
-        except ImportError:
+            report["tcl_version"] = tkinter.Tcl().eval("info patchlevel")
+        except Exception:
             report["ready"] = False
-            report["errors"].append("当前 Python 缺少 Tkinter，请使用项目 Conda 环境。")
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+            report["errors"].append(
+                "桌面组件缺失，请重新解压完整软件包。"
+                if FROZEN
+                else "当前 Python 缺少可用 Tkinter/Tcl，请使用项目 Conda 环境。"
+            )
+        _write_check_report(report, args.check_report)
         return 0 if report["ready"] else 2
 
     from tkinter import messagebox
@@ -67,7 +98,7 @@ def main() -> int:
 
     with single_instance(args.port) as first:
         if not first:
-            messagebox.showinfo("知境桌面助手", "悬浮助手已在运行，请点击桌面右下角的蓝色悬浮球。")
+            messagebox.showinfo("知境桌面助手", "悬浮助手已在运行，请点击桌面上的刘看山图标。")
             return 0
         service = DesktopService(PROJECT_ROOT, port=args.port)
         try:

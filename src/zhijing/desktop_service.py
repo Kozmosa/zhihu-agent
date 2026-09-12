@@ -1,6 +1,5 @@
 """Loopback-only service lifecycle and HTTP boundary for the desktop assistant."""
 
-import os
 import re
 import socket
 import time
@@ -14,6 +13,7 @@ import uvicorn
 
 from zhijing.app import create_app
 from zhijing.core.config import Settings
+from zhijing.desktop_paths import default_data_directory
 
 
 class DesktopServiceError(RuntimeError):
@@ -43,12 +43,11 @@ class DesktopService:
         if type(port) is not int or not 1 <= port <= 65535:
             raise DesktopServiceError("服务端口必须是 1 到 65535 之间的整数。")
         self.project_root = Path(project_root).resolve()
-        configured_data = data_dir
-        if configured_data is None:
-            configured_data = (
-                os.getenv("ZHIJING_DATA_DIR", "").strip() or self.project_root / "data"
-            )
-        self.data_dir = Path(configured_data).resolve()
+        self.data_dir = (
+            Path(data_dir).resolve()
+            if data_dir is not None
+            else default_data_directory(self.project_root)
+        )
         self.port = port
         self._lock = RLock()
         self._server: uvicorn.Server | None = None

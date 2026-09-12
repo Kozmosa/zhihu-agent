@@ -9,6 +9,7 @@ import threading
 import tkinter as tk
 import webbrowser
 from collections.abc import Callable
+from pathlib import Path
 from tkinter import scrolledtext, ttk
 from typing import Any
 from urllib.parse import urlsplit
@@ -29,6 +30,11 @@ class DesktopAssistant:
         self.root = tk.Tk()
         self.root.title("知境桌面助手")
         self.root.resizable(False, False)
+        assets = Path(__file__).with_name("assets")
+        self.app_icon = tk.PhotoImage(master=self.root, file=str(assets / "liukanshan.png"))
+        self.ball_icon = tk.PhotoImage(master=self.root, file=str(assets / "liukanshan-ball.png"))
+        self.header_icon = tk.PhotoImage(master=self.root, file=str(assets / "liukanshan-header.png"))
+        self.root.iconphoto(True, self.app_icon)
         self._closed = False
         self._events: queue.Queue = queue.Queue()
         self._initializing = False
@@ -88,9 +94,7 @@ class DesktopAssistant:
             cursor="hand2",
         )
         self.ball.pack()
-        self.ball.create_oval(3, 3, 61, 61, fill="#DAE6FF", outline="")
-        self.ball.create_oval(6, 5, 59, 58, fill=BLUE, outline="white", width=2)
-        self.ball.create_text(32, 31, text="知", fill="white", font=(self.font, 21, "bold"))
+        self.ball.create_image(32, 32, image=self.ball_icon)
         self.ball.bind("<ButtonPress-1>", self._on_ball_press)
         self.ball.bind("<B1-Motion>", self._on_ball_drag)
         self.ball.bind("<ButtonRelease-1>", self._on_ball_release)
@@ -103,6 +107,7 @@ class DesktopAssistant:
         self.chat_window = tk.Toplevel(self.root)
         self.chat_window.withdraw()
         self.chat_window.title("知境 · 桌面问答")
+        self.chat_window.iconphoto(False, self.app_icon)
         self.chat_window.configure(bg="white")
         self.chat_window.geometry("440x680")
         self.chat_window.minsize(360, 460)
@@ -143,16 +148,7 @@ class DesktopAssistant:
 
         header = tk.Frame(self.chat_window, bg="white", padx=20, pady=14)
         header.pack(fill="x")
-        tk.Label(
-            header,
-            text="知",
-            bg=BLUE,
-            fg="white",
-            width=2,
-            font=(self.font, 17, "bold"),
-            padx=4,
-            pady=2,
-        ).pack(side="left", padx=(0, 12))
+        tk.Label(header, image=self.header_icon, bg="white").pack(side="left", padx=(0, 12))
         titles = tk.Frame(header, bg="white")
         titles.pack(side="left", fill="x", expand=True)
         tk.Label(titles, text="知境问答", bg="white", fg=INK, font=(self.font, 13, "bold")).pack(
