@@ -45,7 +45,10 @@ function environment({savedId, storageFails = false} = {}) {
     item.hidden = /\bhidden\b/.test(match[2]); item.open = /\bopen\b/.test(match[2]);
   }
   const body = new Element('body');
+  const documentListeners = new Map();
   const document = {body, currentScript: {dataset: {configToken: token}},
+    addEventListener: (name, listener) => { if (!documentListeners.has(name)) documentListeners.set(name, []); documentListeners.get(name).push(listener); },
+    dispatchEvent: event => Promise.all((documentListeners.get(event.type) || []).map(listener => listener(event))),
     getElementById: id => nodes.get(id) || null, createElement: tag => new Element(tag)};
   const sessionStorage = {
     getItem: key => { if (storageFails) throw Error('disabled'); return stored.get(key) || null; },
@@ -245,5 +248,16 @@ function environment({savedId, storageFails = false} = {}) {
   assert.equal(ui.get('tool-tab-knowledge').attributes['aria-selected'], 'true');
   assert.equal(ui.document.activeElement.id, 'tool-tab-knowledge');
   cases.push('validated ID restoration, missing/disabled storage and keyboard tabs');
+  const updating = environment(); await updating.idle();
+  const releaseList = updating.defer('/api/v1/sources');
+  const pendingList = updating.event('companion-refresh', 'click');
+  const savedAnswer = {...source(100), id: 'question-imported-answer'};
+  updating.sources.unshift(savedAnswer);
+  await updating.document.dispatchEvent({type: 'zhijing:sources-imported', detail: {saved: [savedAnswer]}});
+  releaseList(); await pendingList; await updating.idle();
+  assert.equal(updating.get('companion-source').value, savedAnswer.id);
+  assert(updating.get('companion-source').children.some(item => item.value === savedAnswer.id));
+  assert.equal(updating.requests.filter(item => item.path === '/api/v1/sources').length, 3, 'Import during list refresh must queue a fresh list request');
+  cases.push('external question import refreshes and selects even during an in-flight source list');
   console.log(JSON.stringify({passed: true, scope: 'Independent companion JS handlers with synthetic API responses; no browser rendering or network', cases}, null, 2));
 })().catch(error => { console.error(error); process.exitCode = 1; });

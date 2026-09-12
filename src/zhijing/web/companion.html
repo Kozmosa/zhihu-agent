@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>知境 · 随身助手</title>
   <link rel="stylesheet" href="/assets/companion.css">
+  <link rel="stylesheet" href="/assets/question-import.css">
 </head>
 <body data-desktop="__DESKTOP__" data-surface="companion">
 <div id="companion-root">
@@ -26,6 +27,7 @@
           <p id="companion-import-status" class="status" role="status" aria-live="polite"></p>
         </form>
       </details>
+      <button id="companion-question-import" type="button" class="qi-entry" data-open-question-import>导入知乎问题</button>
       <details class="source-pages"><summary>更多资料</summary><div class="pager"><button id="companion-source-prev" type="button" aria-label="上一页资料">上一页</button><span id="companion-source-page">第 1 页</span><button id="companion-source-next" type="button" aria-label="下一页资料">下一页</button></div></details>
     </div>
     <p id="companion-status" class="status" role="status" aria-live="polite"></p>
@@ -69,5 +71,6 @@
   <footer class="companion-footer"><span class="presence-dot" aria-hidden="true"></span>你的阅读，随时继续<span class="footer-separator">·</span>关闭窗口即可收起</footer>
 </div>
 <script src="/assets/companion.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
+<script src="/assets/question-import.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
 </body>
 </html>

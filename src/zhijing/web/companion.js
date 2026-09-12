@@ -8,7 +8,7 @@
   const pageSize = 20;
   const state = {selected: null, revision: 0, sources: [], page: 0, more: false,
     loading: false, choosing: false, importing: false, pending: {}, cards: [], cardIndex: 0,
-    revealed: false, exporting: false};
+    revealed: false, exporting: false, nextSourcePage: null};
 
   function node(tag, text, className) {
     const item = document.createElement(tag);
@@ -167,7 +167,7 @@
   }
 
   async function loadSources(page = state.page) {
-    if (state.loading) return;
+    if (state.loading) { state.nextSourcePage = page; return; }
     state.loading = true;
     controls();
     status('companion-status', '正在读取资料…');
@@ -179,7 +179,13 @@
       sourceOptions();
       status('companion-status', state.sources.length ? '' : '暂无资料，可以粘贴导入。');
     } catch (error) { status('companion-status', error.message, 'error'); }
-    finally { state.loading = false; controls(); }
+    finally {
+      state.loading = false; controls();
+      if (state.nextSourcePage !== null) {
+        const nextPage = state.nextSourcePage; state.nextSourcePage = null;
+        await loadSources(nextPage);
+      }
+    }
   }
 
   async function restoreSource() {
@@ -415,6 +421,13 @@
       status('companion-import-status', '已保存。', 'success');
     } catch (error) { status('companion-import-status', error.message, 'error'); }
     finally { state.importing = false; controls(); }
+  });
+
+  document.addEventListener('zhijing:sources-imported', async event => {
+    const saved = event.detail?.saved;
+    if (!Array.isArray(saved) || !saved.length) return;
+    choose(saved[0]);
+    await loadSources(0);
   });
 
   tab('author');

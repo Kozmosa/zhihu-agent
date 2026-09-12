@@ -1,5 +1,7 @@
 import secrets
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -9,6 +11,7 @@ from zhijing import __version__
 from zhijing.api import router
 from zhijing.core.config import Settings
 from zhijing.core.errors import DomainError
+from zhijing.features.zhihu.question_jobs import QuestionJobs
 from zhijing.runtime import Runtime
 from zhijing.settings_ui import router as settings_router
 
@@ -20,9 +23,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.runtime = Runtime(settings)
         app.state.config_token = secrets.token_urlsafe(32)
+        project_root = (
+            Path(sys.executable).resolve().parent
+            if getattr(sys, "frozen", False)
+            else Path(__file__).resolve().parents[2]
+        )
+        app.state.zhihu_questions = QuestionJobs(settings.data_dir, project_root)
         try:
             yield
         finally:
+            app.state.zhihu_questions.close()
             app.state.runtime.close()
 
     app = FastAPI(

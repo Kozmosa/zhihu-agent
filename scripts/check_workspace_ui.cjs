@@ -93,7 +93,11 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
     },
     dispatchEvent(event) { this.events[event.type]?.(event); return true; },
     currentScript: {dataset: {configToken: html.match(/data-config-token="([^"]+)"/)[1]}}, body,
-    getElementById: id => { assert(nodes.has(id), 'Missing element ' + id); return nodes.get(id); },
+    getElementById: id => {
+      // The shared importer creates its dialog after workspace.js has initialized.
+      if (id === 'question-import-dialog' && !nodes.has(id)) return null;
+      assert(nodes.has(id), 'Missing element ' + id); return nodes.get(id);
+    },
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag),
     querySelectorAll: selector => created.filter(node => selector === 'button' ? node.tagName === 'button' : node.className.split(' ').includes(selector.slice(1))),
   };

@@ -55,7 +55,8 @@ function status(id, text, kind = '') {
 
 function controls() {
   const chatRoot = document.getElementById('chat-root');
-  document.querySelectorAll('button').forEach(button => { if (!chatRoot?.contains(button)) button.disabled = state.busy; });
+  const questionImport = document.getElementById('question-import-dialog');
+  document.querySelectorAll('button').forEach(button => { if (!chatRoot?.contains(button) && !questionImport?.contains(button)) button.disabled = state.busy; });
   document.querySelectorAll('.requires-source').forEach(button => { button.disabled = state.busy || !state.selected; });
   $('prev-page').disabled = state.busy || state.page === 0;
   $('next-page').disabled = state.busy || !state.more;
@@ -573,6 +574,14 @@ $('export-tsv').addEventListener('click', () => exportCards('tsv'));
 $('export-apkg').addEventListener('click', () => exportCards('apkg'));
 
 const requestedTask = globalThis.location?.hash.slice(1);
+document.addEventListener('zhijing:sources-imported', async event => {
+  const saved = event.detail?.saved;
+  if (!Array.isArray(saved) || !saved.length) return;
+  select(saved[0]);
+  $('source-filter').value = '';
+  try { await loadSources(0, ''); status('library-status', '已导入 ' + saved.length + ' 篇回答，并选中第一篇。', 'success'); }
+  catch { status('library-status', '回答已保存并选中，资料列表暂未刷新；可稍后点击刷新。', 'error'); }
+});
 if (tasks.includes(requestedTask)) tab(requestedTask);
 syncLibraryDrawer();
 mobileLayout?.addEventListener?.('change', syncLibraryDrawer);

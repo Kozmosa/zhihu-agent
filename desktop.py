@@ -69,9 +69,16 @@ def main() -> int:
     parser.add_argument("--check-report", type=Path, help="将 --check 结果写入 JSON 文件")
     parser.add_argument("--desktop-panel", help=argparse.SUPPRESS)
     parser.add_argument("--parent-pid", type=int, help=argparse.SUPPRESS)
+    parser.add_argument("--zhihu-collect-job", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.check_report and not args.check:
         parser.error("--check-report 必须与 --check 一起使用")
+    if args.zhihu_collect_job:
+        if args.check or args.desktop_panel or args.parent_pid:
+            parser.error("知乎读取窗口不能与其他启动模式同时使用")
+        from zhijing.zhihu_browser import run_question_browser
+
+        return run_question_browser(args.zhihu_collect_job)
     if args.desktop_panel:
         if not args.parent_pid or args.parent_pid < 1 or args.check:
             parser.error("随身助手窗口必须由桌面图标启动")
