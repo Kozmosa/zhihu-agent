@@ -4,8 +4,42 @@ const token = document.currentScript.dataset.configToken;
 const $ = id => document.getElementById(id);
 const modes = {extractive: '离线摘录', ollama: 'Ollama 模型', openai: 'API 模型'};
 const tasks = ['reading', 'author', 'cards', 'facts', 'knowledge'];
-const state = {selected: null, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive', zhihuConfigured: false, zhihuResults: []};
+const state = {selected: null, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive', zhihuConfigured: false, zhihuResults: [], chatSourceId: null, chatRevision: 0, chatMessageCount: 0};
 const pageSize = 20;
+const mobileLayout = globalThis.matchMedia?.('(max-width: 720px)');
+
+function isSmallScreen() {
+  return mobileLayout?.matches ?? (globalThis.innerWidth ?? Infinity) <= 720;
+}
+
+function syncLibraryDrawer() {
+  $('library-drawer').open = !isSmallScreen();
+}
+
+function focusPanel(panelId, inputId) {
+  $(inputId).focus({preventScroll: true});
+  if (isSmallScreen()) $(panelId).scrollIntoView?.({block: 'start'});
+}
+
+function openImportPanel() {
+  if (state.busy) return;
+  $('zhihu-panel').hidden = true;
+  $('zhihu-secret').value = '';
+  $('import-panel').hidden = false;
+  focusPanel('import-panel', 'import-title');
+}
+
+function openZhihuPanel() {
+  if (state.busy) return;
+  $('import-panel').hidden = true;
+  $('zhihu-panel').hidden = false;
+  return job('zhihu-status', '正在读取知乎配置…', async () => {
+    const result = await request('/api/v1/zhihu/status');
+    showZhihuConfiguration(result.configured);
+    status('zhihu-status', '');
+    focusPanel('zhihu-panel', state.zhihuConfigured ? 'zhihu-query' : 'zhihu-secret');
+  });
+}
 
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -27,6 +61,8 @@ function controls() {
   $('export-tsv').disabled = $('export-apkg').disabled = state.busy || !state.cards.length;
   $('run-zhihu-search').disabled = state.busy || !state.zhihuConfigured;
   $('clear-zhihu-secret').disabled = state.busy || !state.zhihuConfigured;
+  $('chat-send').disabled = state.busy || !state.selected;
+  $('chat-launcher').disabled = $('chat-close').disabled = false;
   state.zhihuResults.forEach(result => { result.button.disabled = state.busy || result.imported; });
 }
 
@@ -97,9 +133,92 @@ function safeLink(node, value) {
   } catch { /* Keep invalid links hidden. */ }
 }
 
+function updateChatContext() {
+  const source = state.selected;
+  if (state.chatSourceId !== (source?.id ?? null)) {
+    state.chatSourceId = source?.id ?? null;
+    state.chatRevision += 1;
+    // The empty-state controls live inside the log and must survive source changes.
+    const empty = $('chat-empty');
+    $('chat-messages').replaceChildren(empty);
+    state.chatMessageCount = 0;
+    $('chat-question').value = '';
+    status('chat-status', '');
+  }
+  $('chat-context').textContent = source
+    ? (source.content_extent === 'excerpt' ? '仅依据摘要 · ' : '当前资料 · ') + source.title
+    : '请先选择一篇资料，再开始问答。';
+  $('chat-context').title = source
+    ? source.title + (source.content_extent === 'excerpt' ? '：仅依据已导入摘要回答，不包含完整正文。' : '：依据已导入资料回答。')
+    : '请先选择一篇资料，再开始问答。';
+  $('chat-empty').hidden = state.chatMessageCount > 0;
+  $('chat-pick-source').hidden = Boolean(source);
+  controls();
+}
+
+function openChat() {
+  updateChatContext();
+  $('chat-window').hidden = false;
+  $('chat-launcher').setAttribute('aria-expanded', 'true');
+  $('chat-question').focus({preventScroll: true});
+}
+
+function closeChat() {
+  $('chat-window').hidden = true;
+  $('chat-launcher').setAttribute('aria-expanded', 'false');
+  $('chat-launcher').focus({preventScroll: true});
+}
+
+function chatMessage(role, text) {
+  const article = element('article', undefined, 'chat-message ' + role);
+  article.append(element('div', text, 'chat-message-body'));
+  $('chat-messages').append(article);
+  state.chatMessageCount += 1;
+  $('chat-empty').hidden = true;
+  return article;
+}
+
+function scrollChat() {
+  $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
+}
+
+function submitChat() {
+  return job('chat-status', '正在根据资料回答…', async () => {
+    if (!state.selected) throw new Error('请先在资料库选择一篇资料，再开始问答。');
+    const source = state.selected, revision = state.chatRevision;
+    const question = $('chat-question').value.trim();
+    if (!question || question.length > 2000) throw new Error('请填写 1 至 2,000 字符的问题。');
+    chatMessage('user', question);
+    $('chat-question').value = '';
+    scrollChat();
+    let result;
+    try {
+      await refreshMode();
+      if (state.chatRevision !== revision || state.selected?.id !== source.id) return;
+      result = await request('/api/v1/author/ask', {author_id: source.author_id, primary_source_id: source.id, question});
+    } catch (error) {
+      // A response or error from a previous source must never enter the new conversation.
+      if (state.chatRevision !== revision || state.selected?.id !== source.id) return;
+      if (!$('chat-question').value) $('chat-question').value = question;
+      throw error;
+    }
+    if (state.chatRevision !== revision || state.selected?.id !== source.id) return;
+    const answer = chatMessage('assistant', result.answer);
+    answer.append(element('div', (modes[result.mode] || result.mode) + ' · ' + (result.identity_notice || '助手根据资料回答，不代表作者本人。'), 'chat-message-meta'));
+    const references = element('details', undefined, 'chat-citations');
+    references.append(element('summary', '查看引用'));
+    citations(references, result.citations);
+    if (result.citation_notice) references.append(element('p', result.citation_notice, 'chat-message-meta'));
+    answer.append(references);
+    status('chat-status', '回答完成。');
+    scrollChat();
+  });
+}
+
 function select(source) {
   state.selected = source;
   state.cards = [];
+  $('workspace-empty').hidden = true;
   $('selected-title').textContent = source.title;
   const contentScoped = isContentScoped(source);
   $('selected-meta').textContent = source.author_name + (contentScoped ? ' · 知乎搜索资料' : ' · 作者 ID：' + source.author_id) + ' · ' + source.text.length + ' 字符';
@@ -114,7 +233,15 @@ function select(source) {
   safeLink($('selected-url'), source.url);
   for (const task of tasks) { $(task + '-result').replaceChildren(); status(task + '-status', ''); }
   renderSources();
+  updateChatContext();
   controls();
+  if (isSmallScreen()) {
+    $('library-drawer').open = false;
+    $('zhihu-panel').hidden = true;
+    $('import-panel').hidden = true;
+    $('zhihu-secret').value = '';
+    $('reading-workspace').scrollIntoView?.({block: 'start'});
+  }
 }
 
 function isContentScoped(source) {
@@ -347,10 +474,18 @@ function renderZhihuResults(items) {
   if (!items.length) root.append(element('div', '没有可导入的摘要。可以调整关键词后重新搜索。', 'empty'));
   for (const source of items) {
     const article = element('article', undefined, 'zhihu-result');
-    article.append(element('span', '知乎摘要', 'badge'), element('h3', source.title));
-    article.append(element('p', source.author_name + ' · 摘要 ' + source.text.length + ' 字符', 'muted small'));
-    article.append(element('div', source.text, 'original'));
-    const actions = element('div', undefined, 'actions');
+    article.append(element('h3', source.title, 'zhihu-result-title'));
+    const meta = element('div', undefined, 'zhihu-result-meta');
+    meta.append(element('span', '知乎摘要', 'badge'), element('span', source.author_name + ' · ' + source.text.length + ' 字符', 'muted small'));
+    const excerpt = element('details', undefined, 'zhihu-excerpt-details');
+    const summary = element('summary');
+    const preview = source.text.slice(0, 180) + (source.text.length > 180 ? '…' : '');
+    const toggle = element('span', '展开摘要', 'excerpt-toggle');
+    summary.append(element('span', preview, 'zhihu-excerpt'), toggle);
+    excerpt.append(summary, element('div', source.text, 'zhihu-excerpt-full'));
+    excerpt.addEventListener('toggle', () => { toggle.textContent = excerpt.open ? '收起摘要' : '展开摘要'; });
+    article.append(meta, excerpt);
+    const actions = element('div', undefined, 'actions zhihu-result-actions');
     const link = element('a', '查看知乎来源 ↗');
     safeLink(link, source.url);
     const button = element('button', '导入摘要');
@@ -397,17 +532,31 @@ for (const task of tasks) {
     tab(tasks[next]); $('tab-' + tasks[next]).focus();
   });
 }
-$('open-import').addEventListener('click', () => { $('import-panel').hidden = false; $('import-title').focus(); });
+$('open-import').addEventListener('click', openImportPanel);
+$('empty-import').addEventListener('click', openImportPanel);
 $('close-import').addEventListener('click', () => { $('import-panel').hidden = true; });
-$('open-zhihu').addEventListener('click', () => {
-  $('zhihu-panel').hidden = false;
-  return job('zhihu-status', '正在读取知乎配置…', async () => {
-    const result = await request('/api/v1/zhihu/status');
-    showZhihuConfiguration(result.configured);
-    status('zhihu-status', '');
-    if (state.zhihuConfigured) $('zhihu-query').focus();
-    else $('zhihu-secret').focus();
-  });
+$('open-zhihu').addEventListener('click', openZhihuPanel);
+$('empty-search').addEventListener('click', openZhihuPanel);
+$('chat-launcher').addEventListener('click', () => { if ($('chat-window').hidden) openChat(); else closeChat(); });
+$('chat-close').addEventListener('click', closeChat);
+$('chat-form').addEventListener('submit', event => { event.preventDefault(); return submitChat(); });
+$('chat-question').addEventListener('keydown', event => {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
+    event.preventDefault();
+    return submitChat();
+  }
+});
+document.addEventListener?.('keydown', event => {
+  if (event.key === 'Escape' && !$('chat-window').hidden) { event.preventDefault(); closeChat(); }
+});
+$('chat-pick-source').addEventListener('click', () => {
+  closeChat();
+  if (state.sources.length) {
+    $('library-drawer').open = true;
+    $('library-drawer').scrollIntoView?.({block: 'start'});
+    return;
+  }
+  return openZhihuPanel();
 });
 $('close-zhihu').addEventListener('click', () => { $('zhihu-panel').hidden = true; $('zhihu-secret').value = ''; });
 $('zhihu-config-form').addEventListener('submit', event => {
@@ -492,4 +641,7 @@ $('export-apkg').addEventListener('click', () => exportCards('apkg'));
 
 const requestedTask = globalThis.location?.hash.slice(1);
 if (tasks.includes(requestedTask)) tab(requestedTask);
+syncLibraryDrawer();
+mobileLayout?.addEventListener?.('change', syncLibraryDrawer);
+updateChatContext();
 job('library-status', '正在读取资料库…', async () => { await refreshMode(); await loadSources(); });
