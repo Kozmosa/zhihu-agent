@@ -30,10 +30,9 @@ class _PageTokens(HTMLParser):
         if tag != "script":
             return
         attributes = dict(attrs)
-        for name in ("data-config-token", "nonce"):
-            value = attributes.get(name)
-            if value and re.fullmatch(r"[A-Za-z0-9_-]{20,200}", value):
-                self.tokens.add(value)
+        value = attributes.get("data-config-token")
+        if value and re.fullmatch(r"[A-Za-z0-9_-]{20,200}", value):
+            self.tokens.add(value)
 
 
 class DesktopService:
@@ -53,12 +52,20 @@ class DesktopService:
         self._server: uvicorn.Server | None = None
         self._thread: Thread | None = None
         self._startup_failed = Event()
+        self._config_token: str | None = None
 
     @property
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
 
     def _request(self, method: str, path: str, *, timeout=30, **kwargs) -> httpx.Response:
+        token = None
+        if path.startswith("/api/v1/"):
+            token = self._session_token()
+            headers = httpx.Headers(kwargs.pop("headers", None))
+            headers["X-Zhijing-Token"] = token
+            headers["Origin"] = self.base_url
+            kwargs["headers"] = headers
         try:
             # A fresh client is safe when Tk worker threads issue overlapping requests.
             with httpx.Client(
@@ -79,6 +86,11 @@ class DesktopService:
         if 300 <= response.status_code < 400:
             raise DesktopServiceError("本地服务返回了重定向，已停止请求；请检查端口设置。")
         if response.is_error:
+            if token is not None and response.status_code in {401, 403}:
+                # Refresh only on the next explicit operation, never replay a model request.
+                with self._lock:
+                    if self._config_token == token:
+                        self._config_token = None
             code = None
             try:
                 payload = response.json()
@@ -108,6 +120,16 @@ class DesktopService:
             raise DesktopServiceError("本地服务未能完成请求，请稍后重试。")
         return response
 
+    def _session_token(self) -> str:
+        with self._lock:
+            if self._config_token is None:
+                page = self._request("GET", "/workspace", timeout=10)
+                tokens = _PageTokens(page.text).tokens
+                if len(tokens) != 1:
+                    raise DesktopServiceError("无法读取本地页面会话，请检查服务版本后重试。")
+                self._config_token = next(iter(tokens))
+            return self._config_token
+
     @staticmethod
     def _json(response: httpx.Response):
         try:
@@ -125,7 +147,10 @@ class DesktopService:
             or not re.fullmatch(r"\d+\.\d+\.\d+(?:[A-Za-z0-9.+-]{0,30})", payload["version"])
         ):
             raise DesktopServiceError("该端口没有返回可识别的知境服务状态，请检查端口设置。")
-        return {key: payload[key] for key in ("status", "version", "model_provider")}
+        health = {key: payload[key] for key in ("status", "version", "model_provider")}
+        if payload.get("api_auth") == "session-v1":
+            health["api_auth"] = "session-v1"
+        return health
 
     def _verify_existing_service(self):
         schema = self._json(self._request("GET", "/openapi.json", timeout=3))
@@ -181,6 +206,11 @@ class DesktopService:
                         "该端口已被占用或服务尚未就绪，请稍后重试或选择其他端口；原服务未被修改。"
                     ) from None
             else:
+                if health.get("api_auth") != "session-v1":
+                    raise DesktopServiceError(
+                        "当前端口的知境服务尚未启用新版 API 鉴权。"
+                        "请退出旧版知境及其本地服务，再重新启动当前程序；原服务和资料未被修改。"
+                    )
                 self._verify_existing_service()
                 return health
             if self._thread is not None and self._thread.is_alive():
@@ -274,17 +304,11 @@ class DesktopService:
             raise DesktopServiceError("请先选择一份有效资料。")
         if not isinstance(question, str) or not 1 <= len(question.strip()) <= 2000:
             raise DesktopServiceError("请输入 1 到 2000 个字符的问题。")
-        page = self._request("GET", "/workspace", timeout=10)
-        tokens = _PageTokens(page.text).tokens
-        if len(tokens) != 1:
-            raise DesktopServiceError("无法读取本地页面会话，请检查服务版本后重试。")
-        token = next(iter(tokens))
         payload = self._json(
             self._request(
                 "POST",
                 "/api/v1/author/ask",
                 timeout=300,
-                headers={"X-Zhijing-Token": token, "Origin": self.base_url},
                 json={
                     "author_id": source["author_id"],
                     "primary_source_id": source["id"],
@@ -303,6 +327,7 @@ class DesktopService:
 
     def shutdown(self) -> None:
         with self._lock:
+            self._config_token = None
             # Reusing an existing endpoint never creates these owned-server references.
             server, thread = self._server, self._thread
             if server is None or thread is None:

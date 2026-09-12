@@ -61,7 +61,7 @@ v0.2 已为长文拆解、答主问答、记忆卡片、事实审查、知识地
 
 需要关闭浏览器后仍能提问时，双击项目根目录的 **StartDesktop.cmd** 启动桌面悬浮助手。它使用项目 Conda 的 Tkinter，无需打开网页：刘看山悬浮图标始终置顶，可拖动位置；单击打开独立问答窗，选择资料后输入问题。关闭问答窗或按 Esc 只收起窗口，右键悬浮图标选择“退出”才结束助手。也可以从右键菜单打开工作台和模型配置页。已运行的本地服务会被复用；没有服务时助手自动启动本地服务，并在退出时停止自己启动的服务。资料保存在原数据目录，退出不会删除。
 
-桌面环境检查：在项目目录运行 `.conda\python.exe desktop.py --check`。默认端口为 8000；自定义端口可运行 `StartDesktop.cmd --port 8001`。复用已有服务前会检查采集接口和实际脚本资源，旧版或组件缺失会提示先退出旧服务，避免安装链接返回 404。桌面助手无需浏览器存活，但助手进程及其连接的本地服务需要保持运行。默认不会设置系统开机自启动。
+桌面环境检查：在项目目录运行 `.conda\python.exe desktop.py --check`。默认端口为 8000；自定义端口可运行 `StartDesktop.cmd --port 8001`。复用已有服务前会检查会话鉴权版本、采集接口和实际脚本资源，旧版或组件缺失会提示先退出旧服务，避免继续使用未加固的接口或安装链接返回 404。桌面助手无需浏览器存活，但助手进程及其连接的本地服务需要保持运行。默认不会设置系统开机自启动。
 
 ## Windows 桌面软件
 
@@ -113,10 +113,33 @@ node scripts/check_zhihu_companion.cjs ./.cache/companion-tests/node_modules/jsd
 
 - OpenAI 兼容模式调用 `Base URL/chat/completions`，保留服务商给出的 `/v1` 或代理前缀，默认使用 JSON 模式。不支持 JSON 模式时，可在高级设置选择提示词约束；业务仍严格校验 JSON 和引用。不支持仅提供 Responses 或 Anthropic Messages 协议的地址。
 - Ollama 模式继续使用原生 `/api/generate`。可在高级设置调整输出格式、超时、输出 tokens 和上下文预算。
+- 远程模型地址必须使用 HTTPS，并校验证书；HTTP 仅允许 `localhost` 或回环 IP，局域网地址同样需要 HTTPS。连接不跟随重定向，避免凭据转发。地址不能包含用户名、密码、查询参数或片段；API Key 请填入独立密钥栏。
 - 页面输入的密钥仅保留在服务进程内存，接口不会返回密钥，不写 `.env`、数据库或浏览器 localStorage。启用成功后清空输入框；再次测试或修改配置需重新输入密钥，留空表示无鉴权。
 - 配置即时生效，无需重启；失败保留当前配置。正在运行的业务请求继续使用原来的连接，结束后释放。可随时切回离线模式。
 - 页面配置在服务重启后失效；重启仍读取启动环境变量。连接测试只确认短请求与 JSON 输出，不能代表五项业务的真实模型质量。
 - 配置页仅允许本机访问，具备 Host、Origin 和页面令牌校验；保持默认 `127.0.0.1` 监听，不应作为公开管理接口部署。
+
+## 本机接口与密钥保护
+
+`/api/v1/` 下的业务接口，包括查询、导入、模型调用及任务执行/重试/取消，统一要求本机连接和 `X-Zhijing-Token` 会话令牌。浏览器还会校验 Origin 与 Fetch Metadata，拒绝外站发起的请求。工作台和桌面助手自动获取令牌，服务重启后刷新页面即可恢复；失效的写操作不会自动重放。令牌不写浏览器存储、URL 或日志，页面的 CSP nonce 与 API 令牌独立。
+
+唯一使用独立凭据的接口是 `POST /api/v1/zhihu/companion/receive`：它继续验证油猴配对口令，只能投递待预览资料，不能读取资料库或调用模型。现有脚本无需升级或重新配对。服务端只保存配对口令哈希，原始口令保存在油猴存储；不要分享配对信息。
+
+命令行调用需要先建立本机会话。仓库自带的 demo、验收脚本已适配；自写 Python 客户端可使用下面的辅助函数。`/docs` 可查看接口结构，但未携带令牌的直接试调会返回 403。
+
+```python
+import httpx
+from zhijing.local_auth import connect_local_client
+
+with httpx.Client(base_url="http://127.0.0.1:8000", trust_env=False) as client:
+    connect_local_client(client)
+    sources = client.get("/api/v1/sources")
+    sources.raise_for_status()
+```
+
+模型调用记录在落库前会遮盖当前连接的 Authorization、API Key 及其常见 JSON 转义形式；请求校验错误也不会回显原始输入。该保护针对本次及后续调用，不会清理既有历史记录，也不覆盖服务商的任意自定义编码或用户主动粘贴到正文中的其他凭据。
+
+对外模型通信使用标准 TLS；本机页面与油猴之间仍使用回环 HTTP。接口地址和分发的脚本本身可被查看，本机恶意程序或已被控制的浏览器也不在这层防护范围内。此设计用于降低网页跨站盗用接口、网络明文泄露模型密钥及调用记录泄露当前密钥的风险，不提供代码保密或公网多用户鉴权。
 
 也可使用 `ZHIJING_MODEL_PROVIDER=openai` 与 `ZHIJING_OPENAI_URL`、`ZHIJING_OPENAI_MODEL`、`ZHIJING_OPENAI_API_KEY` 启动。其他变量为 `ZHIJING_OPENAI_TIMEOUT`（120）、`ZHIJING_OPENAI_FORMAT`（json / prompt）、`ZHIJING_OPENAI_MAX_INPUT_CHARS`（120000）、`ZHIJING_OPENAI_MAX_TOKENS`（4096）、`ZHIJING_OPENAI_CONTEXT_WINDOW`（32768）。数字为默认值，需按服务商模型限制调整。
 

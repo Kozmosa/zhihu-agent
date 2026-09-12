@@ -72,6 +72,8 @@ def build_container(settings: Settings) -> Container:
             timeout=settings.ollama_timeout,
             headers=headers,
             trust_env=False,
+            follow_redirects=False,
+            verify=True,
         )
         structured = OllamaGenerator(
             client,
@@ -90,6 +92,8 @@ def build_container(settings: Settings) -> Container:
             if settings.openai_api_key
             else {},
             trust_env=False,
+            follow_redirects=False,
+            verify=True,
         )
         structured = OpenAICompatibleGenerator(
             client,

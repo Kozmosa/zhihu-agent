@@ -1,9 +1,9 @@
 """Chat Completions transport with the existing strict evidence validation."""
 
 import httpx
-from .transcript_context import get_context
 
 from zhijing.core.errors import DomainError
+from zhijing.infrastructure.model_transcript import record_exchange
 from zhijing.infrastructure.ollama import OllamaGenerator
 from zhijing.infrastructure.ollama_transport import system_prompt
 
@@ -37,14 +37,23 @@ class OpenAICompatibleTransport:
             body["response_format"] = {"type": "json_object"}
         if self.thinking != "auto":
             body["thinking"] = {"type": self.thinking}
-        ctx = get_context()
-        if ctx:
-            ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="request", provider="openai", model=self.model, payload={"prompt": prompt, "instructions": instructions})
+        record_exchange(
+            self.client,
+            provider="openai",
+            model=self.model,
+            event="request",
+            payload={"prompt": prompt, "instructions": instructions},
+        )
         try:
-            response = self.client.post("chat/completions", json=body)
+            response = self.client.post("chat/completions", json=body, follow_redirects=False)
             response.raise_for_status()
-            if ctx:
-                ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="response", provider="openai", model=self.model, payload={"response": response.text})
+            record_exchange(
+                self.client,
+                provider="openai",
+                model=self.model,
+                event="response",
+                payload={"response": response.text},
+            )
         except httpx.TimeoutException as exc:
             raise DomainError(
                 "model_timeout", "模型调用超时，请检查服务或调整超时设置。", 502

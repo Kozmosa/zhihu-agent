@@ -1,9 +1,9 @@
 """Ollama HTTP boundary: no silent fallback, retry, or provider error disclosure."""
 
 import httpx
-from .transcript_context import get_context
 
 from zhijing.core.errors import DomainError
+from zhijing.infrastructure.model_transcript import record_exchange
 
 
 def system_prompt(instructions: str) -> str:
@@ -33,14 +33,23 @@ class OllamaTransport:
             body["format"] = output_format
         base_path = self.client.base_url.path.rstrip("/")
         endpoint = "generate" if base_path.endswith("/api") else "api/generate"
-        ctx = get_context()
-        if ctx:
-            ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="request", provider="ollama", model=self.model, payload={"prompt": prompt, "instructions": instructions})
+        record_exchange(
+            self.client,
+            provider="ollama",
+            model=self.model,
+            event="request",
+            payload={"prompt": prompt, "instructions": instructions},
+        )
         try:
-            response = self.client.post(endpoint, json=body)
+            response = self.client.post(endpoint, json=body, follow_redirects=False)
             response.raise_for_status()
-            if ctx:
-                ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="response", provider="ollama", model=self.model, payload={"response": response.text})
+            record_exchange(
+                self.client,
+                provider="ollama",
+                model=self.model,
+                event="response",
+                payload={"response": response.text},
+            )
         except httpx.TimeoutException as exc:
             raise DomainError(
                 "model_timeout", "模型调用超时，请检查模型服务或调整超时配置。", 502

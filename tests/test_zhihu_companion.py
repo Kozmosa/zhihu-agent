@@ -45,7 +45,11 @@ def payload(*items, **changes):
 
 @pytest.fixture
 def companion(tmp_path):
-    with TestClient(create_app(Settings(data_dir=tmp_path)), client=("127.0.0.1", 12000)) as client:
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("127.0.0.1", 12000),
+    ) as client:
         client.headers["X-Zhijing-Token"] = client.app.state.config_token
         yield client, tmp_path
 

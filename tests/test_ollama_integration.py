@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 import zhijing.container as container_module
 from zhijing.app import create_app
 from zhijing.core.config import Settings
+from zhijing.local_auth import connect_local_client
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import ollama_smoke  # noqa: E402
@@ -58,10 +59,13 @@ def ollama_api(monkeypatch, tmp_path):
     settings = Settings(
         data_dir=tmp_path,
         model_provider="ollama",
-        ollama_url="http://model-fixture",
+        ollama_url="https://model-fixture",
         ollama_model="contract-fixture",
     )
-    with TestClient(create_app(settings)) as client:
+    with TestClient(
+        create_app(settings), base_url="http://127.0.0.1", client=("127.0.0.1", 12345)
+    ) as client:
+        connect_local_client(client)
         imported = client.post("/api/v1/sources/import", json=IMPORT_BODY)
         assert imported.status_code == 200
         source_id = imported.json()[0]["id"]

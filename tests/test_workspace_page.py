@@ -1,3 +1,5 @@
+import re
+
 from fastapi.testclient import TestClient
 
 from zhijing.app import create_app
@@ -14,7 +16,9 @@ def test_workspace_assets_are_packaged_and_local_only(tmp_path):
         assert page.status_code == 200
         assert "__CONFIG_TOKEN__" not in page.text
         assert 'src="/assets/workspace.js"' in page.text
-        assert "nonce-" + client.app.state.config_token in page.headers["content-security-policy"]
+        nonce = re.search(r"nonce-([^']+)", page.headers["content-security-policy"])[1]
+        assert nonce != client.app.state.config_token
+        assert f'nonce="{nonce}"' in page.text
         assert "style-src 'self'" in page.headers["content-security-policy"]
         for filename, content_type in [
             ("workspace.js", "text/javascript"),
@@ -27,6 +31,10 @@ def test_workspace_assets_are_packaged_and_local_only(tmp_path):
         assert client.get("/assets/config.py").status_code == 404
         assert client.get("/workspace", headers={"Origin": "https://evil.test"}).status_code == 403
         assert client.get("/workspace", headers={"Host": "evil.test"}).status_code == 400
-    with TestClient(create_app(Settings(data_dir=tmp_path)), client=("192.0.2.3", 12345)) as client:
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("192.0.2.3", 12345),
+    ) as client:
         assert client.get("/workspace").status_code == 403
         assert client.get("/assets/workspace.js").status_code == 403

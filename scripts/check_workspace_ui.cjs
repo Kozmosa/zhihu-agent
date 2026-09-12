@@ -11,6 +11,10 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   const page = await fetch(base + '/workspace');
   assert.equal(page.status, 200);
   const html = await page.text();
+  const pageToken = html.match(/data-config-token="([^"]+)"/)[1];
+  const apiFetch = (url, options = {}) => fetch(url, {...options, headers: {
+    ...options.headers, 'X-Zhijing-Token': pageToken,
+  }});
   const nodes = new Map();
   const created = [];
   class Element {
@@ -92,13 +96,14 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
       this.events[name] = event => this.listeners[name].forEach(listener => listener(event));
     },
     dispatchEvent(event) { this.events[event.type]?.(event); return true; },
-    currentScript: {dataset: {configToken: html.match(/data-config-token="([^"]+)"/)[1]}}, body,
+    currentScript: {dataset: {configToken: pageToken, sessionId: html.match(/data-session-id="([^"]+)"/)[1]}}, body,
     getElementById: id => { assert(nodes.has(id), 'Missing element ' + id); return nodes.get(id); },
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag),
     querySelectorAll: selector => created.filter(node => selector === 'button' ? node.tagName === 'button' : node.className.split(' ').includes(selector.slice(1))),
   };
   const windowEvents = {};
   const sandbox = {document, sessionStorage, AbortController, addEventListener: (name, listener) => { windowEvents[name] = listener; }, CustomEvent: class { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } }, location: {hash: '#cards'}, URL: LocalURL, URLSearchParams, setTimeout: fn => fn(), fetch: async (url, options) => {
+    if (url.startsWith('/api/v1/')) assert.equal(options.headers['X-Zhijing-Token'], pageToken, 'Every UI API request must authenticate, including GET');
     requests.push({url, options});
     inFlight++;
     try {
@@ -201,7 +206,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   get('import-file').files = [{size: 500, text: async () => JSON.stringify(sample)}];
   await click('import-json');
   assert.match(get('import-status').className, /success/);
-  const primary = await (await fetch(base + '/api/v1/sources/' + primaryId)).json();
+  const primary = await (await apiFetch(base + '/api/v1/sources/' + primaryId)).json();
   sandbox.fixturePrimary = primary;
   vm.runInContext('select(fixturePrimary)', sandbox);
 
@@ -266,7 +271,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.equal(get('chat-window').hidden, true);
   get('chat-launcher').events.click();
   assert.equal(get('chat-window').hidden, false);
-  const otherChatSource = (await (await fetch(base + '/api/v1/sources')).json()).find(source => source.id !== primaryId);
+  const otherChatSource = (await (await apiFetch(base + '/api/v1/sources')).json()).find(source => source.id !== primaryId);
   assert(otherChatSource);
   sandbox.fixtureChatOther = otherChatSource;
   vm.runInContext('select(fixtureChatOther)', sandbox);
@@ -605,7 +610,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   const webImportRequests = requests.filter(row => row.url === '/api/v1/sources/import').slice(importsBeforePreview);
   assert.deepEqual(webImportRequests.map(row => JSON.parse(row.options.body).items.length), [20, 20, 20, 5]);
   assert.equal(JSON.parse(webImportRequests.at(-1).options.body).items.at(-1).text, '  回答完整正文 44\n原始段落，保留换行。\n');
-  const savedWeb = await (await fetch(base + '/api/v1/sources?author_id=zhihu-author%3Aweb-fixture&limit=100')).json();
+  const savedWeb = await (await apiFetch(base + '/api/v1/sources?author_id=zhihu-author%3Aweb-fixture&limit=100')).json();
   assert.equal(savedWeb.length, 45, 'Retry after a lost response must not duplicate stored answers');
   assert(savedWeb.every(row => row.author_id === 'zhihu-author:web-fixture' && row.content_extent === 'fulltext'));
 
@@ -712,13 +717,13 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   await click('web-import-selected');
   assert.match(get('web-status').textContent, /已确认导入 2 篇/);
   assert.equal(get('web-import-selected').disabled, true);
-  let savedCompanion = await (await fetch(base + '/api/v1/sources?author_id=zhihu-author%3Acompanion-fixture&limit=100')).json();
+  let savedCompanion = await (await apiFetch(base + '/api/v1/sources?author_id=zhihu-author%3Acompanion-fixture&limit=100')).json();
   assert.equal(savedCompanion.length, 2);
   assert(savedCompanion.every(row => row.author_id === 'zhihu-author:companion-fixture' && row.content_extent === 'unknown'));
   assert.deepEqual(savedCompanion.map(row => row.text).sort(), companionItems.map(row => row.draft.text).sort());
   await companionAction(0).click(); await idle();
   await click('web-import-selected');
-  savedCompanion = await (await fetch(base + '/api/v1/sources?author_id=zhihu-author%3Acompanion-fixture&limit=100')).json();
+  savedCompanion = await (await apiFetch(base + '/api/v1/sources?author_id=zhihu-author%3Acompanion-fixture&limit=100')).json();
   assert.equal(savedCompanion.length, 2, 'Reopening and importing a received batch is duplicate-safe');
 
   failures.set(companionBatchPath, 'Fixture received batch expired');
@@ -744,7 +749,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   await companionAction(1).click(); await idle();
   assert.equal(get('companion-inbox').children.length, 0);
   assert.equal(get('web-results').children.length, 0, 'Dismissing the active batch clears its pending selection');
-  assert.equal((await (await fetch(base + '/api/v1/sources?author_id=zhihu-author%3Acompanion-fixture&limit=100')).json()).length, 2, 'Dismissing a batch preserves imported library sources');
+  assert.equal((await (await apiFetch(base + '/api/v1/sources?author_id=zhihu-author%3Acompanion-fixture&limit=100')).json()).length, 2, 'Dismissing a batch preserves imported library sources');
   assert(!requests.some(row => /companion\/(pair|key|token)/.test(row.url)), 'Workspace must not fetch or display the browser bridge secret');
   get('source-filter').value = 'zhihu-author:companion-fixture';
   await submit('source-filter-form');
@@ -754,6 +759,9 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.match(get('selected-extent').textContent, /完整性未核验/);
   assert.equal(get('source-preview-label').textContent, '查看已导入内容');
   assert.match(allText(get('source-list')), /完整性未核验/);
+  for (const [key, value] of stored) {
+    assert(!key.includes(pageToken) && !value.includes(pageToken), 'Browser storage must not persist the API credential');
+  }
   const companionCases = ['companion served userscript metadata', 'companion paired and unpaired status', 'companion hash opens receiver', 'companion no automatic import', 'companion direct criteria independent of received batch', 'companion inbox refresh preserves reviewed choices', 'companion conservative content extent and exact text', 'companion real author grouping and duplicate-safe import', 'companion expired or mismatched batch clears stale preview', 'companion inbox failure preserves reviewed batch', 'companion dismiss preserves saved sources', 'companion no bridge secret retrieval', 'companion imported content retains completeness notice'];
   console.log(JSON.stringify({passed: true, scope: 'UI handlers plus real isolated HTTP; Zhihu and companion inbox responses mocked; no browser rendering', cases: [...companionCases, 'empty library', 'manual and JSON import', 'source fidelity', 'reading', 'author scope and citations', 'cards', 'TSV and APKG downloads', 'fact exclusion and validation', 'graph interaction', 'failure clears stale exports', 'pagination and filters', 'keyboard tabs', 'unsafe URL rejected', 'Zhihu credential gating and clearing', 'Zhihu search request and text rendering', 'excerpt import and content-scoped author identity', 'imported button stays disabled', 'Zhihu count validation and upstream error', 'empty search results', 'empty-state entry and mutually exclusive panels', 'compact excerpt disclosure', 'responsive library and return to reading', 'floating chat open close Escape and source gating', 'chat source request and safe cited response', 'chat Enter Shift and IME composition', 'chat history reset and stale response isolation', 'chat close remains usable while busy and duplicate submit blocked', 'web anonymous preview and safe full text rendering', 'web session Cookie clear on success error and close', 'web 45-answer batches and author grouping', 'web lost-response retry without duplicates', 'web immutable import and disabled controls', 'web question author defaults and bounds', 'web stale criteria and cancellation isolation', 'web empty and upstream failure reset']}));
 })().catch(error => { console.error(error); process.exitCode = 1; });

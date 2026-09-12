@@ -4,9 +4,12 @@ import io
 import time
 import zipfile
 
+from zhijing.local_auth import connect_local_client
+
 
 def exercise(client, sample):
     cases = []
+    connect_local_client(client)
 
     def check(title, method, path, expected, validate, body=None):
         started = time.perf_counter()

@@ -88,7 +88,7 @@ async function request(path, body, binary = false, signal) {
   try {
     response = await fetch(path, {
       method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
-      headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+      headers: body === undefined ? {'X-Zhijing-Token': token} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     });

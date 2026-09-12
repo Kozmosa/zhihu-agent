@@ -117,7 +117,7 @@ def model_mock(provider="ollama", responder=reply_for, **kwargs):
         )
         return httpx.Response(200, json=response)
 
-    with httpx.Client(transport=httpx.MockTransport(handler), base_url="http://test/") as client:
+    with httpx.Client(transport=httpx.MockTransport(handler), base_url="https://test/") as client:
         factory = OllamaGenerator if provider == "ollama" else OpenAICompatibleGenerator
         yield factory(client, "mock-model", **kwargs), calls
 

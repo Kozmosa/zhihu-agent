@@ -67,7 +67,11 @@ def web_api(tmp_path, monkeypatch):
             )
 
     monkeypatch.setattr(web_router, "ZhihuWebService", StubService)
-    with TestClient(create_app(Settings(data_dir=tmp_path)), client=("127.0.0.1", 12345)) as client:
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("127.0.0.1", 12345),
+    ) as client:
         client.headers["X-Zhijing-Token"] = client.app.state.config_token
         yield client, calls
 
