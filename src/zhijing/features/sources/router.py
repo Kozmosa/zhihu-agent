@@ -3,11 +3,12 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query
 
 from zhijing.dependencies import get_container
-from zhijing.domain.models import Source, SourceGroupPage, SourcePage
+from zhijing.domain.models import Source, SourceGroup, SourceGroupPage, SourcePage
 from zhijing.features.sources.schemas import (
     DeleteSourcesRequest,
     DeleteSourcesResult,
     ImportRequest,
+    QuestionTitleRequest,
 )
 from zhijing.settings_ui import guard
 
@@ -59,6 +60,11 @@ def source_groups(
 def delete_sources(body: DeleteSourcesRequest, container=Depends(get_container)):
     deleted = container.sources.delete(body.source_ids)
     return DeleteSourcesResult(deleted_ids=deleted, deleted_count=len(deleted))
+
+
+@router.post("/question-title", response_model=SourceGroup, dependencies=[Depends(guard)])
+def set_question_title(body: QuestionTitleRequest, container=Depends(get_container)):
+    return container.sources.set_question_title(body.question_id, body.title)
 
 
 @router.get("/{source_id}", response_model=Source)

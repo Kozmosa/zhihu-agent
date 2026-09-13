@@ -119,6 +119,7 @@ def fixture_server(
                             for key in [
                                 "/api/v1/sources/groups",
                                 "/api/v1/sources/delete",
+                                "/api/v1/sources/question-title",
                                 "/api/v1/zhihu/questions/jobs",
                             ]
                         }

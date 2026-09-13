@@ -94,6 +94,8 @@ function controls() {
   $('run-zhihu-search').disabled = state.busy || !state.zhihuConfigured;
   state.zhihuResults.forEach(result => { result.button.disabled = state.busy || result.imported; });
   $('library-view').disabled = state.busy;
+  $('library-save-title').disabled = state.busy;
+  $('library-question-title').disabled = state.busy;
   $('library-delete').disabled = state.busy || !library.checked.size;
   $('library-select-page').disabled = state.busy || !state.sources.length;
   $('library-select-page').checked = Boolean(state.sources.length) && state.sources.every(source => library.checked.has(source.id));
@@ -276,6 +278,12 @@ function renderSources() {
   $('library-selection').hidden = grouping;
   $('library-back').hidden = library.group === null;
   const questionGroup = library.view === 'question' && Boolean(library.group?.key);
+  $('library-question-title-form').hidden = !questionGroup;
+  if (questionGroup && library.titleQuestionKey !== library.group.key) {
+    $('library-question-title').value = library.group.name === `问题 ${library.group.key}（标题待补全）` ? '' : library.group.name;
+    safeLink($('library-question-url'), 'https://www.zhihu.com/question/' + library.group.key);
+  }
+  library.titleQuestionKey = questionGroup ? library.group.key : null;
   $('library-back').textContent = library.view === 'question' ? '← 返回全部问题' : '← 返回全部作者';
   $('library-scope').textContent = library.group ? library.group.name + ' · ' + library.group.count + (questionGroup ? ' 篇回答' : ' 条资料') : (library.view === 'question' ? '先选问题，再查看不同作者的回答' : '');
   $('library-search').placeholder = grouping ? (library.view === 'question' ? '搜索问题标题或问题 ID' : '搜索作者姓名或作者 ID') : '搜索问题、作者或正文';
@@ -687,14 +695,17 @@ function renderWebResults(items) {
       }
     } catch { /* Unassociated articles remain individual previews. */ }
     let group = questionId && questionGroups.get(questionId);
+    const questionName = source.title.trim() !== source.author_name.trim() && !['未提供题目', '(未能解析出标题/问题文本)'].includes(source.title.trim()) ? source.title : null;
     if (questionId && !group) {
       const section = element('section', undefined, 'web-question-group');
       const header = element('div', undefined, 'web-question-heading');
       const count = element('span', '', 'muted small');
-      header.append(element('span', '问题', 'library-group-kind'), element('h3', source.title), count);
+      const title = element('h3', questionName || `问题 ${questionId}（标题待补全）`);
+      header.append(element('span', '问题', 'library-group-kind'), title, count);
       section.append(header); root.append(section);
-      group = {section, count, size: 0}; questionGroups.set(questionId, group);
+      group = {section, count, title, hasTitle: Boolean(questionName), size: 0}; questionGroups.set(questionId, group);
     }
+    if (group && !group.hasTitle && questionName) { group.title.textContent = questionName; group.hasTitle = true; }
     if (group) { group.size++; group.count.textContent = `${group.size} 篇回答 · 问题 ${questionId} · 勾选后导入`; }
     const article = element('article', undefined, 'zhihu-result web-result');
     const heading = element('label', undefined, 'web-result-heading');
@@ -916,6 +927,17 @@ $('library-back').addEventListener('click', () => job('library-status', '正在�
 $('library-search-form').addEventListener('submit', event => { event.preventDefault(); return job('library-status', '正在搜索…', async () => {
   library.query = $('library-search').value.trim(); await loadSources(0);
 }); });
+$('library-question-title-form').addEventListener('submit', event => {
+  event.preventDefault();
+  if (state.busy || library.view !== 'question' || !library.group?.key) return;
+  return job('library-status', '正在保存问题标题…', async () => {
+    const title = $('library-question-title').value.trim();
+    if (!title || title.length > 200) throw new Error('请填写 1 至 200 字的问题标题。');
+    const group = await request('/api/v1/sources/question-title', {question_id: library.group.key, title});
+    library.group = group; $('library-question-title').value = group.name;
+    renderSources(); status('library-status', '问题标题已保存，整组回答共用此标题。', 'success');
+  });
+});
 $('library-select-page').addEventListener('change', () => {
   if (state.busy) return;
   library.checked = new Set($('library-select-page').checked ? state.sources.map(source => source.id) : []);

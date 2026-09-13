@@ -163,12 +163,13 @@ class DesktopService:
         required = {
             "/api/v1/sources/groups",
             "/api/v1/sources/delete",
+            "/api/v1/sources/question-title",
             "/api/v1/zhihu/questions/jobs",
         }
         paths = schema.get("paths", {})
         if not isinstance(paths, dict) or not required.issubset(paths):
             raise DesktopServiceError(
-                "当前端口运行的是旧版知境，缺少资料管理或作者读取组件。请先处理待导入资料并退出旧服务，再启动新版；原服务未被修改。"
+                "当前端口运行的是旧版知境，缺少问题标题修正、资料管理或作者读取组件。请先处理待导入资料并退出旧服务，再启动新版；原服务未被修改。"
             )
         incompatible = (
             "当前端口的知境服务缺少可用的知乎采集组件，可能仍是旧版。"

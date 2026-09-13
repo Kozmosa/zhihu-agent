@@ -360,6 +360,11 @@ body[data-desktop=true] .tabs { position: sticky; top: 0; z-index: 5; background
 #library-search-form {margin-top:10px}
 .library-selection[hidden] {display:none}
 .library-group {border-left:3px solid #4863df;padding:14px;background:#f8f9ff}
+.library-group::before {display:none}
+.source-item.library-group strong {-webkit-line-clamp:unset;display:block}
+#library-question-title-form {margin:12px 0}
+#library-question-title-form[hidden] {display:none}
+#library-question-title-form .inline {flex-wrap:wrap;font-size:11px}
 .library-group-kind {display:block;font-size:11px;color:#5268bd;font-weight:600;margin-bottom:5px}
 .library-group strong {font-size:15px;line-height:1.55}
 #library-scope {font-weight:600;line-height:1.6;overflow-wrap:anywhere}

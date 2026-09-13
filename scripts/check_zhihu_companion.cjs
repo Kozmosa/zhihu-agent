@@ -66,7 +66,7 @@ const test = (name, run) => tests.push({ name, run });
 
 test('metadata limits hosts and contains no credential APIs or remote dependencies', () => {
   assert.match(source, /@name\s+知乎伴侣·知境版/);
-  assert.match(source, /@version\s+0\.8\.4/);
+  assert.match(source, /@version\s+0\.8\.5/);
   assert.match(source, /Kozmosa（原版 0\.8\.2）/);
   assert.deepEqual([...source.matchAll(/@connect\s+(\S+)/g)].map(match => match[1]), ['127.0.0.1', 'localhost']);
   assert.doesNotMatch(source, /document\s*\.\s*cookie|localStorage|sessionStorage|@require|@grant\s+GM_cookie|headers\s*:\s*\{[^}]*\bCookie\b/s);
@@ -183,6 +183,32 @@ test('answer detail sends its own answer, not a preceding recommended answer', a
   await b.api.sendCurrentContent();
   const payload = JSON.parse(b.requests[0].data);
   assert.equal(payload.items.length, 1); assert.equal(payload.items[0].external_id, '102');
+});
+
+test('question page header wins over nested author metadata for all five answers', () => {
+  const names = ['Jhon Smith', '忧郁的Tom', '宝塔山赵四', '猴姆', '鹅妈妈密密麻麻'];
+  const html = '<h1 class="QuestionHeader-title">这才是五篇回答共同的问题？</h1>' + names.map((name, i) => answer({id:String(101+i), authorName:name})).join('');
+  const b = browser('https://www.zhihu.com/question/10', html);
+  for (const item of b.document.querySelectorAll('.AnswerItem')) {
+    item.querySelector('h2').remove();
+    item.removeAttribute('data-zop');
+    item.querySelector('.AuthorInfo').innerHTML += '<span itemprop="author" itemtype="http://schema.org/Person"><meta itemprop="name" content="Jhon Smith"></span>';
+  }
+  const items = b.api.gatherItems(b.api.pageScope()).items;
+  assert.equal(items.length, 5);
+  assert(items.every(item => item.title === '这才是五篇回答共同的问题？'));
+  assert.deepEqual(Array.from(items, item=>item.author_name), names);
+});
+
+test('author metadata cannot become a missing question title or overwrite another question', () => {
+  const b = browser('https://www.zhihu.com/people/alice/answers', answer());
+  const item = b.document.querySelector('.AnswerItem');
+  item.querySelector('h2').remove(); item.removeAttribute('data-zop');
+  item.querySelector('.AuthorInfo').innerHTML += '<span itemprop="author" itemtype="http://schema.org/Person"><meta itemprop="name" content="Jhon Smith"></span>';
+  assert.equal(b.api.gatherItems(b.api.pageScope()).items[0].title, '未提供题目');
+  const other = browser('https://www.zhihu.com/question/10', '<h1 class="QuestionHeader-title">当前问题</h1>' + answer({question:'11', title:'另一个问题'}));
+  const collected = other.api.collectItem(other.document.querySelector('.AnswerItem'), {scope:'page'});
+  assert.equal(collected.title,'另一个问题');
 });
 
 test('request size is rejected before any content is silently truncated or sent', async () => {

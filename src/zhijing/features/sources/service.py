@@ -38,3 +38,6 @@ class SourceService:
 
     def delete(self, source_ids: list[str]):
         return self.repository.delete_many(source_ids)
+
+    def set_question_title(self, question_id: str, title: str):
+        return self.repository.set_question_title(question_id, title)

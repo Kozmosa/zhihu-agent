@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         知乎伴侣·知境版
 // @namespace    zhijing.local/zhihu-companion
-// @version      0.8.4
+// @version      0.8.5
 // @description  读取已打开的知乎页面，批量筛选回答并送入本机知境预览；保留原版 Markdown、JSON、点击提取能力。
 // @author       Kozmosa（原版 0.8.2）；知境本地适配
 // @match        https://www.zhihu.com/*
@@ -694,17 +694,34 @@ function extractArticleTitle(container) {
   return cleanupTitle(document.title || '');
 }
 
-function extractQuestion(container) {
+function extractQuestion(container, questionId = null) {
   if (!container) return '';
-
+  const currentQuestion = zhihuURL(location.href)?.pathname.match(/^\/question\/(\d+)(?:\/answer\/\d+)?\/?$/)?.[1];
+  const header = document.querySelector('h1.QuestionHeader-title');
+  if (header && currentQuestion && (!questionId || questionId === currentQuestion)) {
+    const title = cleanupTitle(header.textContent);
+    if (title) return title;
+  }
   let questionText = '';
-
-  const anchor = container.querySelector('h2 a[href*="/question/"]');
-  if (anchor) questionText = anchor.textContent.trim();
+  const authorName = cleanupTitle(container.querySelector('.AuthorInfo-name')?.textContent || '');
+  const acceptable = value => {
+    const text = cleanupTitle(value);
+    return text && text !== authorName ? text : '';
+  };
+  for (const anchor of container.querySelectorAll('h2 a[href*="/question/"], .ContentItem-title a[href*="/question/"]')) {
+    const linkedQuestion = zhihuURL(anchor.href)?.pathname.match(/^\/question\/(\d+)(?:\/answer\/\d+)?\/?$/)?.[1];
+    if (linkedQuestion && (!questionId || linkedQuestion === questionId)) {
+      questionText = acceptable(anchor.textContent);
+      if (questionText) break;
+    }
+  }
 
   if (!questionText) {
-    const metaName = container.querySelector('meta[itemprop="name"]');
-    if (metaName?.content) questionText = metaName.content.trim();
+    for (const metaName of container.querySelectorAll('meta[itemprop="name"]')) {
+      if (metaName.closest('[itemprop="author"], [itemtype$="/Person"], [itemtype$="/Organization"], .AuthorInfo, .UserLink')) continue;
+      questionText = acceptable(metaName.content);
+      if (questionText) break;
+    }
   }
 
   if (!questionText) {
@@ -712,14 +729,14 @@ function extractQuestion(container) {
     if (zop) {
       try {
         const parsed = JSON.parse(zop);
-        if (parsed?.title) questionText = String(parsed.title).trim();
+        if (parsed?.title) questionText = acceptable(parsed.title);
       } catch (_) {}
     }
   }
 
   if (!questionText) {
-    const h2 = container.querySelector('h2');
-    if (h2) questionText = h2.textContent.trim();
+    const h2 = container.querySelector('h2.ContentItem-title');
+    if (h2 && !h2.querySelector('a[href]')) questionText = acceptable(h2.textContent);
   }
 
   return cleanupTitle(questionText || '');
@@ -1586,8 +1603,7 @@ function collectItem(container, scope) {
   if (!node) return null;
   const text = cleanAndMarkdown(node).markdown.trim();
   if (!text) return null;
-  let title = isArticle ? extractArticleTitle(container) : extractQuestion(container);
-  if (!title && scope.scope === 'question') title = cleanupTitle(document.querySelector('h1.QuestionHeader-title')?.textContent || '');
+  const title = isArticle ? extractArticleTitle(container) : extractQuestion(container, identity.question_id);
   return { content_type: isArticle ? 'article' : 'answer', ...identity, title: (title || '未提供题目').slice(0, 200), ...author,
     text, content_extent: contentExtent(container), ...readVotes(container), captured_at: new Date().toISOString() };
 }

@@ -58,6 +58,10 @@ class SQLiteSourceRepository:
                     "ALTER TABLE sources ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0"
                 )
             connection.execute("CREATE INDEX IF NOT EXISTS idx_question ON sources(question_id)")
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS question_titles "
+                "(question_id TEXT PRIMARY KEY, title TEXT NOT NULL)"
+            )
             connection.execute("PRAGMA user_version=2")
 
     def save(self, draft: SourceDraft) -> Source:
@@ -186,7 +190,12 @@ class SQLiteSourceRepository:
             "MIN(json_extract(payload, '$.author_name'))"
             if by == "author"
             else (
-                "CASE WHEN question_id IS NULL THEN '未关联问题' ELSE MIN(json_extract(payload, '$.title')) END"
+                "CASE WHEN question_id IS NULL THEN '未关联问题' ELSE COALESCE("
+                "(SELECT title FROM question_titles WHERE question_titles.question_id = sources.question_id), "
+                "MIN(CASE WHEN trim(json_extract(payload, '$.title')) != trim(json_extract(payload, '$.author_name')) "
+                "AND trim(json_extract(payload, '$.title')) NOT IN ('未提供题目', '(未能解析出标题/问题文本)') "
+                "THEN json_extract(payload, '$.title') END), "
+                "'问题 ' || question_id || '（标题待补全）') END"
             )
         )
         grouped = f"SELECT {key} AS key, {name} AS name, COUNT(*) AS count FROM sources WHERE deleted = 0 GROUP BY {key}"
@@ -206,6 +215,21 @@ class SQLiteSourceRepository:
             limit=limit,
             has_more=offset + len(rows) < total,
         )
+
+    def set_question_title(self, question_id: str, title: str) -> SourceGroup:
+        # Question metadata does not rewrite source evidence or stable IDs.
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            count = connection.execute(
+                "SELECT COUNT(*) FROM sources WHERE question_id = ? AND deleted = 0", (question_id,)
+            ).fetchone()[0]
+            if not count:
+                raise DomainError("question_not_found", "资料库中没有这个问题的回答。", 404)
+            connection.execute(
+                "INSERT INTO question_titles VALUES (?, ?) "
+                "ON CONFLICT(question_id) DO UPDATE SET title = excluded.title", (question_id, title)
+            )
+        return SourceGroup(key=question_id, name=title, count=count)
 
     def delete_many(self, source_ids: list[str]) -> list[str]:
         # Tombstones exclude sources from all new reads/retrieval; existing run artifacts stay intact.
