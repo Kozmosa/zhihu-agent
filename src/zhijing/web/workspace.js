@@ -3,11 +3,15 @@
 const token = document.currentScript.dataset.configToken;
 const $ = id => document.getElementById(id);
 const desktopPage = document.body.dataset?.desktop === 'true';
-const sourceStorageKey = 'zhijing.chat.source.' + token;
+const sourceStorageKey = 'zhijing.chat.source.' + document.currentScript.dataset.sessionId;
 const tasks = ['reading', 'author', 'cards', 'facts', 'knowledge'];
 const tabs = ['reading', 'author', 'cards', 'facts', 'opinions', 'knowledge'];
 const state = {selected: null, selectionRevision: 0, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive', zhihuConfigured: false, zhihuResults: []};
+const webImport = {configured: false, results: [], signature: '', origin: 'web', batchId: '', controller: null, retry: false};
+const companion = {paired: false, items: []};
+const webCriteriaIds = ['web-mode', 'web-url', 'web-min-votes', 'web-max-items'];
 const pageSize = 20;
+const library = {view: 'all', group: null, groups: [], query: '', checked: new Set()};
 const mobileLayout = globalThis.matchMedia?.('(max-width: 720px)');
 let mapCleanup = null, mapRevision = 0;
 let opinionOpenRevision = 0;
@@ -49,12 +53,14 @@ function focusPanel(panelId, inputId) {
 function openImportPanel() {
   if (state.busy) return;
   $('zhihu-panel').hidden = true;
+  closeWebImportPanel();
   $('import-panel').hidden = false;
   focusPanel('import-panel', 'import-title');
 }
 
 function openZhihuPanel() {
   if (state.busy) return;
+  closeWebImportPanel();
   $('import-panel').hidden = true;
   $('zhihu-panel').hidden = false;
   return job('zhihu-status', '正在读取搜索服务状态…', async () => {
@@ -87,17 +93,38 @@ function controls() {
   $('export-tsv').disabled = $('export-apkg').disabled = state.busy || !state.cards.length;
   $('run-zhihu-search').disabled = state.busy || !state.zhihuConfigured;
   state.zhihuResults.forEach(result => { result.button.disabled = state.busy || result.imported; });
+  $('library-view').disabled = state.busy;
+  $('library-delete').disabled = state.busy || !library.checked.size;
+  $('library-select-page').disabled = state.busy || !state.sources.length;
+  $('library-select-page').checked = Boolean(state.sources.length) && state.sources.every(source => library.checked.has(source.id));
+  $('library-select-page').indeterminate = Boolean(library.checked.size) && !$('library-select-page').checked;
+  $('library-delete').textContent = library.checked.size ? `删除选中（${library.checked.size}）` : '删除选中';
+  for (const id of [...webCriteriaIds, 'web-cookie']) $(id).disabled = state.busy;
+  $('clear-web-cookie').disabled = state.busy || !webImport.configured;
+  $('cancel-web-preview').hidden = !webImport.controller;
+  $('cancel-web-preview').disabled = !webImport.controller || webImport.controller.signal.aborted;
+  const selected = webImport.results.filter(result => result.checkbox.checked && !result.imported).length;
+  const completed = webImport.results.filter(result => result.imported).length;
+  $('web-selection-bar').hidden = !webImport.results.length;
+  $('web-selection-count').textContent = `已选 ${selected} 篇 · 已确认导入 ${completed} 篇 / 共 ${webImport.results.length} 篇`;
+  $('web-import-selected').disabled = state.busy || !selected;
+  $('web-import-selected').textContent = (webImport.retry ? '重试所选' : '导入所选') + (selected ? `（${selected}）` : '');
+  $('web-select-all').disabled = state.busy || completed === webImport.results.length;
+  $('web-clear-selection').disabled = state.busy || !selected;
+  webImport.results.forEach(result => { result.checkbox.disabled = state.busy || result.imported; });
 }
 
-async function request(path, body, binary = false) {
+async function request(path, body, binary = false, signal) {
   let response;
   try {
     response = await fetch(path, {
       method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
-      headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+      headers: body === undefined ? {'X-Zhijing-Token': token} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
-  } catch {
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
     throw new Error('无法连接本地服务，请确认服务仍在运行。');
   }
   if (response.ok && binary) return response.blob();
@@ -108,6 +135,9 @@ async function request(path, body, binary = false) {
       model_unavailable: '分析服务暂不可用，请稍后重试或联系管理员。',
       model_timeout: '分析等待超时，请稍后重试。',
       model_invalid_response: '分析未返回完整结果，请重试或联系管理员。',
+      model_output_truncated: '模型达到输出上限，未完成生成。请减少生成数量（制卡可先试 1～3 张），或在模型设置中提高最大输出 Token；使用思考模型时也可尝试关闭思考。',
+      cards_format_invalid: '模型返回的卡片格式或字段长度不符合要求。请先试生成 1～3 张，或换用支持 JSON 输出的模型。',
+      cards_evidence_invalid: '卡片证据无法在资料原文中找到，本次未生成卡片。请重试或换用其他模型。',
       model_input_too_large: '当前资料过长，请分段导入后重试。',
       model_context_exceeded: '当前资料过长，请分段导入后重试。',
       zhihu_not_configured: '搜索服务暂未就绪，请联系管理员；也可以导入资料。',
@@ -120,7 +150,7 @@ async function request(path, body, binary = false) {
     if (data.error?.code?.startsWith('model_')) throw new Error('本次整理未能完成，请重试或联系管理员。');
     if (data.error?.message) throw new Error(userNotice(data.error.message));
     if (Array.isArray(data.detail)) {
-      const names = {title: '标题', text: '正文', author_id: '作者分组', author_name: '作者名称', url: '来源链接', topics: '主题标签', claims: '主张', question: '问题', query: '搜索关键词', count: '数量', deck_name: '牌组名称'};
+      const names = {title: '标题', text: '正文', author_id: '作者 ID', author_name: '作者名称', url: '来源链接', topics: '主题标签', claims: '主张', question: '问题', query: '搜索关键词', access_secret: 'Access Secret', count: '数量', deck_name: '牌组名称', cookie: '登录状态', mode: '读取范围', min_votes: '最低赞同数', max_items: '最多读取回答数'};
       const fields = [...new Set(data.detail.flatMap(error => error.loc || []).filter(key => names[key]).map(key => names[key]))];
       throw new Error((fields.length ? fields.join('、') : '输入内容') + '未通过校验，请检查是否为空、格式或长度是否超限。');
     }
@@ -210,8 +240,10 @@ function select(source, notifyChat = true) {
   const contentScoped = isContentScoped(source);
   $('selected-meta').textContent = source.author_name + (contentScoped ? ' · 知乎搜索资料' : '') + ' · ' + source.text.length + ' 字符';
   $('source-preview-label').textContent = source.content_extent === 'excerpt' ? '查看已导入摘要' : source.content_extent === 'fulltext' ? '查看完整原文' : '查看已导入内容';
-  $('selected-extent').hidden = source.content_extent !== 'excerpt';
-  $('selected-extent').textContent = source.content_extent === 'excerpt' ? '当前资料为摘要，不包含完整正文。后续分析仅依据已导入内容。' : '';
+  const unverifiedZhihuText = source.origin === 'zhihu' && source.content_extent === 'unknown';
+  $('selected-extent').hidden = source.content_extent !== 'excerpt' && !unverifiedZhihuText;
+  $('selected-extent').textContent = source.content_extent === 'excerpt' ? '当前资料为摘要，不包含完整正文。后续分析仅依据已导入内容。'
+    : unverifiedZhihuText ? '当前资料的正文完整性未核验。后续分析仅依据已导入内容。' : '';
   $('author-scope-notice').textContent = contentScoped
     ? '问答仅基于这条已导入内容，不自动合并其他同名作者的资料。助手不代表作者本人。'
     : '以当前文章为主要资料，参考同一作者的已导入内容。助手不代表作者本人。';
@@ -226,6 +258,9 @@ function select(source, notifyChat = true) {
   $('import-panel').hidden = true;
   if (isSmallScreen()) {
     $('library-drawer').open = false;
+    $('zhihu-panel').hidden = true;
+    $('import-panel').hidden = true;
+      closeWebImportPanel();
     $('reading-workspace').scrollIntoView?.({block: 'start'});
   }
 }
@@ -237,14 +272,40 @@ function isContentScoped(source) {
 function renderSources() {
   const list = $('source-list');
   list.replaceChildren();
-  if (!state.sources.length) list.append(element('div', state.filter ? '这个作者分组下没有资料。可清空筛选，或导入资料。' : '资料库还是空的。点击“导入资料”开始。', 'empty'));
+  const grouping = library.view !== 'all' && library.group === null;
+  $('library-selection').hidden = grouping;
+  $('library-back').hidden = library.group === null;
+  $('library-scope').textContent = library.group ? library.group.name + ' · ' + library.group.count + ' 条资料' : '';
+  if (grouping) {
+    if (!library.groups.length) list.append(element('p', '没有匹配的分组。', 'empty'));
+    for (const group of library.groups) {
+      const button = element('button', undefined, 'source-item library-group'); button.type = 'button';
+      button.append(element('strong', group.name), element('small', group.count + ' 条资料 · ' + (group.key || '暂无问题链接')));
+      button.addEventListener('click', () => job('library-status', '正在读取分组…', async () => {
+        library.group = group; library.query = ''; $('library-search').value = '';
+        await loadSources(0, library.view === 'author' ? group.key : '');
+      }));
+      list.append(button);
+    }
+    $('page-number').textContent = '第 ' + (state.page + 1) + ' 页';
+    return;
+  }
+  if (!state.sources.length) list.append(element('div', state.filter || library.group || library.query ? '当前筛选下没有资料。可返回分组、清空筛选，或导入资料。' : '资料库还是空的。点击“导入资料”开始。', 'empty'));
   for (const source of state.sources) {
     const button = element('button', undefined, 'source-item');
     button.type = 'button';
     button.setAttribute('aria-pressed', String(state.selected?.id === source.id));
-    button.append(element('strong', source.title), element('small', source.author_name + ' · ' + source.text.length + ' 字符' + (source.content_extent === 'excerpt' ? ' · 摘要' : '')));
+    button.append(element('strong', source.title), element('small', source.author_name + ' · ' + source.text.length + ' 字符' + (source.content_extent === 'excerpt' ? ' · 摘要' : source.origin === 'zhihu' && source.content_extent === 'unknown' ? ' · 完整性未核验' : '')));
     button.addEventListener('click', () => { if (!state.busy) select(source); });
-    list.append(button);
+    const row = element('div', undefined, 'library-source-row');
+    const checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = library.checked.has(source.id);
+    checkbox.setAttribute('aria-label', '选择删除：' + source.title + ' · ' + source.author_name);
+    checkbox.addEventListener('change', () => {
+      if (state.busy) { checkbox.checked = library.checked.has(source.id); return; }
+      if (checkbox.checked) library.checked.add(source.id); else library.checked.delete(source.id);
+      controls();
+    });
+    row.append(checkbox, button); list.append(row);
   }
   $('page-number').textContent = '第 ' + (state.page + 1) + ' 页';
 }
@@ -253,13 +314,40 @@ async function loadSources(page = state.page, filter = state.filter) {
   // Fetch one extra item to decide whether another page exists.
   const params = new URLSearchParams({offset: String(page * pageSize), limit: String(pageSize + 1)});
   if (filter) params.set('author_id', filter);
-  const rows = await request('/api/v1/sources?' + params);
+  library.checked.clear();
+  if (library.view !== 'all' && library.group === null) {
+    params.set('by', library.view); params.set('q', library.query); params.set('limit', String(pageSize));
+    const groups = await request('/api/v1/sources/groups?' + params);
+    library.groups = groups.items; state.sources = []; state.page = page; state.more = groups.has_more; state.filter = '';
+    renderSources(); status('library-status', `${groups.total} 个${library.view === 'author' ? '作者' : '问题'}分组`); return;
+  }
+  if (library.view === 'question' && library.group) params.set('question_id', library.group.key);
+  let rows;
+  if (library.query) {
+    params.set('q', library.query);
+    rows = (await request('/api/v1/sources/search?' + params)).items;
+  } else rows = await request('/api/v1/sources?' + params);
+  if (!rows.length && page > 0) return loadSources(page - 1, filter);
   state.page = page;
   state.filter = filter;
   state.more = rows.length > pageSize;
   state.sources = rows.slice(0, pageSize);
   renderSources();
   status('library-status', '');
+}
+
+function resetLibrary() {
+  library.view = 'all'; library.group = null; library.query = ''; library.checked.clear();
+  $('library-view').value = 'all'; $('library-search').value = '';
+}
+
+function clearSelectedSource() {
+  clearMap(); state.selected = null; state.selectionRevision++; state.cards = [];
+  try { globalThis.sessionStorage.removeItem(sourceStorageKey); } catch { /* Optional. */ }
+  $('workspace-empty').hidden = false; $('selected-title').textContent = '选择一份资料，开始阅读';
+  $('selected-meta').textContent = ''; $('selected-text').textContent = ''; $('source-preview').hidden = true;
+  $('selected-extent').hidden = true; safeLink($('selected-url'), null);
+  for (const task of tasks) { $(task + '-result').replaceChildren(); status(task + '-status', ''); }
 }
 
 function requireSource() {
@@ -395,6 +483,7 @@ async function saveSources(items) {
   if (!saved.length) throw new Error('导入没有返回资料。');
   // The write succeeded even if refreshing the list later fails.
   select(saved[0]);
+  resetLibrary();
   $('source-filter').value = '';
   status('import-status', `已保存 ${saved.length} 条资料，已选中第一条。`, 'success');
   try {
@@ -452,6 +541,261 @@ function renderZhihuResults(items) {
   controls();
 }
 
+function closeWebImportPanel() {
+  $('web-import-panel').hidden = true;
+  $('web-cookie').value = '';
+}
+
+function showWebConfiguration(configured) {
+  webImport.configured = configured === true;
+  $('web-config-state').textContent = webImport.configured
+    ? '当前服务会话已配置登录状态，读取时会验证是否有效。'
+    : '默认尝试公开访问，无需先配置登录状态。';
+  controls();
+}
+
+function openWebImportPanel() {
+  if (state.busy) return;
+  $('zhihu-panel').hidden = true;
+  $('import-panel').hidden = true;
+  $('web-import-panel').hidden = false;
+  return job('companion-status', '正在读取接收列表…', async () => {
+    // A failure in the optional direct-reader settings must not hide received batches.
+    const results = await Promise.allSettled([
+      loadCompanionInbox(),
+      request('/api/v1/zhihu/web/status').then(result => {
+        showWebConfiguration(result.configured);
+        status('web-config-status', '');
+      }),
+    ]);
+    if (results[1].status === 'rejected') status('web-config-status', results[1].reason.message, 'error');
+    if (results[0].status === 'rejected') throw results[0].reason;
+  }).then(() => { if (!$('web-import-panel').hidden) focusPanel('web-import-panel', 'refresh-companion'); });
+}
+
+async function loadCompanionInbox() {
+  const [connection, inbox] = await Promise.all([
+    request('/api/v1/zhihu/companion/status'),
+    request('/api/v1/zhihu/companion/inbox'),
+  ]);
+  if (!Array.isArray(inbox.items)) throw new Error('接收列表无法读取，请刷新后重试。');
+  companion.paired = connection.paired === true;
+  companion.items = inbox.items;
+  $('companion-pair-state').textContent = companion.paired
+    ? '已连接浏览器采集助手。前往知乎读取并发送回答后，点击“刷新接收列表”。'
+    : '尚未连接。安装脚本后，在浏览器中刷新当前工作台，点击“连接当前知境”。';
+  renderCompanionInbox();
+  status('companion-status', inbox.items.length ? `收到 ${inbox.items.length} 批回答，等待你预览并选择导入。` : '暂时没有待导入的回答。', inbox.items.length ? 'success' : '');
+}
+
+function refreshCompanionInbox() {
+  return job('companion-status', '正在刷新接收列表…', loadCompanionInbox);
+}
+
+function renderCompanionInbox() {
+  const root = $('companion-inbox');
+  root.replaceChildren();
+  for (const batch of companion.items) {
+    const article = element('article', undefined, 'companion-batch');
+    article.append(element('h4', batch.label || (batch.scope === 'author' ? '同一作者的回答' : '知乎回答')));
+    const date = new Date(batch.captured_at);
+    article.append(element('p', `${batch.count} 篇 · ${Number.isNaN(date.getTime()) ? '采集时间未知' : date.toLocaleString('zh-CN')}`, 'muted small'));
+    const link = element('a', '查看采集页面 ↗'); safeLink(link, batch.page_url);
+    const actions = element('div', undefined, 'actions');
+    const preview = element('button', '预览并导入'); preview.type = 'button';
+    preview.addEventListener('click', () => previewCompanionBatch(batch.batch_id));
+    const dismiss = element('button', '移出接收列表', 'quiet'); dismiss.type = 'button';
+    dismiss.addEventListener('click', () => dismissCompanionBatch(batch.batch_id));
+    actions.append(preview, dismiss);
+    article.append(link, actions);
+    root.append(article);
+  }
+  controls();
+}
+
+function previewCompanionBatch(batchId) {
+  return job('web-status', '正在读取浏览器发送的回答…', async () => {
+    clearWebResults();
+    const result = await request('/api/v1/zhihu/companion/inbox/' + encodeURIComponent(batchId));
+    if (result.batch_id !== batchId || !Array.isArray(result.items)) throw new Error('收到的回答批次不匹配，请刷新接收列表后重新选择。');
+    webImport.origin = 'companion';
+    webImport.batchId = batchId;
+    webImport.signature = 'companion:' + batchId;
+    renderWebResults(result.items);
+    const report = [`${result.target_label ? result.target_label + '：' : ''}浏览器发送了 ${result.items.length} 篇可预览回答。`, '以下内容来自采集时页面实际加载的回答，尚未保存到资料库。'];
+    if (result.skipped_count) report.push(`已略过 ${result.skipped_count} 条无法导入的内容。`);
+    if (result.has_more) report.push('还有未加载的回答，本次采集不代表全部内容。');
+    if (result.warning) report.push(result.warning);
+    if (result.items.length) report.push('请核对正文，取消不需要的回答后点击“导入所选”。');
+    status('web-status', report.join('\n'), result.items.length ? 'success' : '');
+  });
+}
+
+function dismissCompanionBatch(batchId) {
+  return job('companion-status', '正在移出接收列表…', async () => {
+    const result = await request('/api/v1/zhihu/companion/inbox/' + encodeURIComponent(batchId) + '/dismiss', {});
+    if (result.removed !== true) throw new Error('尚未确认移出，请刷新接收列表后重试。');
+    if (webImport.origin === 'companion' && webImport.batchId === batchId) {
+      clearWebResults();
+      status('web-status', '该批回答已移出接收列表，已导入的资料仍保留在资料库。');
+    }
+    await loadCompanionInbox();
+  });
+}
+
+function webCriteriaSignature() {
+  return JSON.stringify(webCriteriaIds.map(id => $(id).value));
+}
+
+function clearWebResults() {
+  webImport.results = [];
+  webImport.signature = '';
+  webImport.origin = 'web';
+  webImport.batchId = '';
+  webImport.retry = false;
+  $('web-results').replaceChildren();
+  controls();
+}
+
+function webCriteriaChanged() {
+  if (state.busy || webImport.origin === 'companion') return;
+  const hadResults = webImport.results.length > 0;
+  clearWebResults();
+  status('web-status', hadResults ? '读取条件已改变，请重新读取并预览。' : '');
+}
+
+function renderWebResults(items) {
+  const root = $('web-results');
+  root.replaceChildren();
+  webImport.results = [];
+  if (!items.length) root.append(element('div', '本次没有符合条件且可读取正文的回答。可调整赞同数或更换链接后重试。', 'empty'));
+  for (const item of items) {
+    const source = item.draft;
+    const article = element('article', undefined, 'zhihu-result web-result');
+    const heading = element('label', undefined, 'web-result-heading');
+    const checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = true;
+    checkbox.setAttribute('aria-label', '选择回答：' + source.title + ' · ' + source.author_name);
+    heading.append(checkbox, element('span', source.title, 'zhihu-result-title'));
+    const importedLabel = element('span', '可导入', 'badge');
+    const meta = element('div', undefined, 'zhihu-result-meta');
+    const votes = item.voteup_count == null ? '赞同数未知' : `${item.voteup_count} 赞同`;
+    const extent = source.content_extent === 'excerpt' ? '摘要' : webImport.origin === 'companion'
+      ? '页面已加载内容 · 完整性未核验' : source.content_extent === 'fulltext' ? '回答正文' : '完整性未核验';
+    meta.append(importedLabel, element('span', `${source.author_name} · ${votes} · ${source.text.length} 字符`, 'muted small'), element('span', extent, 'web-extent'));
+    const excerpt = element('details', undefined, 'web-text-details');
+    const preview = source.text.slice(0, 220) + (source.text.length > 220 ? '…' : '');
+    excerpt.append(element('summary', source.content_extent === 'excerpt' ? '查看本次读取的摘要' : '查看本次读取的回答内容'), element('div', source.text, 'zhihu-excerpt-full'));
+    const link = element('a', '查看知乎原回答 ↗'); safeLink(link, source.url);
+    article.append(heading, meta, element('p', preview, 'web-text-preview'), excerpt, link);
+    const result = {item, checkbox, imported: false, importedLabel};
+    checkbox.addEventListener('change', () => {
+      if (state.busy || result.imported) return;
+      controls();
+    });
+    webImport.results.push(result);
+    root.append(article);
+  }
+  controls();
+}
+
+function previewWebAnswers() {
+  return job('web-status', '正在读取回答正文，请稍候…', async () => {
+    clearWebResults();
+    const mode = $('web-mode').value, url = $('web-url').value.trim();
+    const minVotes = Number($('web-min-votes').value), maxItems = Number($('web-max-items').value);
+    if (!['question', 'author'].includes(mode)) throw new Error('请选择问题或作者读取范围。');
+    if (!url || url.length > 2048) throw new Error('请填写有效的知乎问题或作者主页链接。');
+    if (!$('web-min-votes').value.trim() || !Number.isInteger(minVotes) || minVotes < 0 || minVotes > 1000000000) throw new Error('最低赞同数必须是 0 至 1,000,000,000 的整数。');
+    if (!Number.isInteger(maxItems) || maxItems < 1 || maxItems > 100) throw new Error('最多读取回答数必须是 1 至 100 的整数。');
+    const signature = webCriteriaSignature();
+    const controller = new AbortController();
+    webImport.controller = controller;
+    controls();
+    try {
+      const result = await request('/api/v1/zhihu/web/preview', {url, mode, min_votes: minVotes, max_items: maxItems}, false, controller.signal);
+      if (controller.signal.aborted) return;
+      if (signature !== webCriteriaSignature()) {
+        status('web-status', '读取条件已改变，本次结果已丢弃，请重新读取。');
+        return;
+      }
+      webImport.signature = signature;
+      renderWebResults(result.items);
+      const count = result.items.length;
+      const report = [`${result.target_label ? result.target_label + '：' : ''}本次可导入 ${count} 篇回答。`, `已读取 ${result.pages_fetched} 页，检查 ${result.scanned_count} 条，略过 ${result.skipped_count} 条。`];
+      if (result.has_more) report.push('还有未读取的回答。本次结果仅覆盖已访问范围。');
+      if (result.warning) report.push(result.warning);
+      if (count) report.push('已默认选中本次结果，可取消不需要的回答后导入。');
+      status('web-status', report.join('\n'), count ? 'success' : '');
+    } catch (error) {
+      if (controller.signal.aborted || error.name === 'AbortError') {
+        status('web-status', '已取消等待，尚未导入资料。本次网页读取可能仍在结束，请稍后重试。');
+        return;
+      }
+      if (signature !== webCriteriaSignature()) {
+        status('web-status', '读取条件已改变，本次结果已丢弃，请重新读取。');
+        return;
+      }
+      throw error;
+    } finally {
+      webImport.controller = null;
+    }
+  });
+}
+
+function importWebSelection() {
+  return job('web-status', '正在导入所选回答…', async () => {
+    const expectedSignature = webImport.origin === 'companion' ? 'companion:' + webImport.batchId : webCriteriaSignature();
+    if (!webImport.signature || webImport.signature !== expectedSignature) {
+      clearWebResults();
+      throw new Error('读取条件已改变，请重新预览后再导入。');
+    }
+    // Capture both rows and payload before awaiting: later form or selection changes
+    // cannot alter which answers a running import sends or acknowledges.
+    const selected = webImport.results.filter(result => result.checkbox.checked && !result.imported);
+    const drafts = selected.map(result => JSON.parse(JSON.stringify(result.item.draft)));
+    if (!selected.length) throw new Error('请先选择需要导入的回答。');
+    let completed = 0, failure = null;
+    for (let offset = 0; offset < drafts.length; offset += 20) {
+      const batch = drafts.slice(offset, offset + 20);
+      try {
+        const saved = await request('/api/v1/sources/import', {items: batch});
+        if (!Array.isArray(saved) || saved.length !== batch.length) throw new Error('当前批次的保存结果未能完整确认。');
+        for (const result of selected.slice(offset, offset + batch.length)) {
+          result.imported = true;
+          result.checkbox.checked = false;
+          result.importedLabel.textContent = '已导入';
+        }
+        completed += batch.length;
+        controls();
+        status('web-status', `本次已确认导入 ${completed} / ${drafts.length} 篇回答…`);
+      } catch (error) { failure = error; break; }
+    }
+    webImport.retry = Boolean(failure);
+    if (failure) {
+      status('web-status', `本次已确认导入 ${completed} 篇，剩余 ${drafts.length - completed} 篇未确认。\n${failure.message}\n保留了未确认的选择，可点击“重试所选”。未确认批次可能已保存，重复导入相同内容不会新增重复记录。`, 'error');
+    } else {
+      status('web-status', `本次已确认导入 ${completed} 篇回答。可在左侧资料库选择阅读，同一作者的回答可一起用于答主问答。重复内容会复用已有记录。`, 'success');
+    }
+    // Even a lost response can follow a successful write; refresh without replacing
+    // the batch outcome or sending its full answer payload to the chat widget.
+    try { await loadSources(0, ''); $('source-filter').value = ''; }
+    catch (error) { status('library-status', '导入状态见批量面板。资料列表刷新失败：' + error.message, 'error'); }
+  });
+}
+
+async function saveWebCookie(clear = false) {
+  return job('web-config-status', clear ? '正在清除会话登录状态…' : '正在保存登录状态…', async () => {
+    try {
+      const cookie = clear ? '' : $('web-cookie').value.trim();
+      if (!clear && !cookie) throw new Error('请输入登录状态，或使用“清除会话登录状态”。');
+      const result = await request('/api/v1/zhihu/web/config', {cookie});
+      showWebConfiguration(result.configured);
+      if (webImport.configured === clear) throw new Error('登录状态未能更新，请重试。');
+      status('web-config-status', clear ? '当前服务会话的登录状态已清除。' : '已保存到当前服务会话。输入框已清空，读取时会验证是否有效。', 'success');
+    } finally { $('web-cookie').value = ''; }
+  });
+}
+
 async function exportCards(format) {
   return job('cards-status', '正在生成下载文件…', async () => {
     if (!state.cards.length) throw new Error('请先生成卡片。');
@@ -481,6 +825,40 @@ $('empty-import').addEventListener('click', openImportPanel);
 $('close-import').addEventListener('click', () => { $('import-panel').hidden = true; });
 $('open-zhihu').addEventListener('click', openZhihuPanel);
 $('empty-search').addEventListener('click', openZhihuPanel);
+$('open-web-import').addEventListener('click', openWebImportPanel);
+$('refresh-companion').addEventListener('click', refreshCompanionInbox);
+$('close-web-import').addEventListener('click', () => { if (!state.busy) closeWebImportPanel(); });
+$('web-direct-panel').addEventListener('toggle', () => { if (!$('web-direct-panel').open) $('web-cookie').value = ''; });
+$('web-config-panel').addEventListener('toggle', () => { if (!$('web-config-panel').open) $('web-cookie').value = ''; });
+$('web-config-form').addEventListener('submit', event => { event.preventDefault(); return saveWebCookie(); });
+$('clear-web-cookie').addEventListener('click', () => saveWebCookie(true));
+$('web-preview-form').addEventListener('submit', event => { event.preventDefault(); return previewWebAnswers(); });
+$('cancel-web-preview').addEventListener('click', () => {
+  if (!webImport.controller) return;
+  webImport.controller.abort();
+  status('web-status', '已取消等待，尚未导入资料。本次网页读取可能仍在结束，请稍后重试。');
+  controls();
+});
+$('web-mode').addEventListener('change', () => {
+  if (state.busy) return;
+  const author = $('web-mode').value === 'author';
+  $('web-url-label').textContent = author ? '知乎作者主页链接' : '知乎问题链接';
+  $('web-url').placeholder = author ? 'https://www.zhihu.com/people/…' : 'https://www.zhihu.com/question/…';
+  $('web-min-votes').value = author ? '0' : '100';
+  webCriteriaChanged();
+});
+for (const id of webCriteriaIds.slice(1)) $(id).addEventListener('input', webCriteriaChanged);
+$('web-select-all').addEventListener('click', () => {
+  if (state.busy) return;
+  webImport.results.forEach(result => { result.checkbox.checked = !result.imported; });
+  controls();
+});
+$('web-clear-selection').addEventListener('click', () => {
+  if (state.busy) return;
+  webImport.results.forEach(result => { result.checkbox.checked = false; });
+  controls();
+});
+$('web-import-selected').addEventListener('click', importWebSelection);
 document.addEventListener('zhijing:chat-source-selected', event => {
   const source = event.detail;
   if (source?.id && source.id !== state.selected?.id) select(source, false);
@@ -502,7 +880,37 @@ $('zhihu-search-form').addEventListener('submit', event => {
   });
 });
 $('reload-sources').addEventListener('click', () => job('library-status', '正在刷新…', async () => { await refreshMode(); await loadSources(); }));
-$('source-filter-form').addEventListener('submit', event => { event.preventDefault(); return job('library-status', '正在筛选…', () => loadSources(0, $('source-filter').value.trim())); });
+$('source-filter-form').addEventListener('submit', event => { event.preventDefault(); return job('library-status', '正在筛选…', () => { resetLibrary(); return loadSources(0, $('source-filter').value.trim()); }); });
+$('library-view').addEventListener('change', () => job('library-status', '正在读取分组…', async () => {
+  library.view = $('library-view').value; library.group = null; library.query = ''; $('library-search').value = ''; $('source-filter').value = '';
+  await loadSources(0, '');
+}));
+$('library-back').addEventListener('click', () => job('library-status', '正在读取分组…', async () => {
+  library.group = null; library.query = ''; $('library-search').value = ''; await loadSources(0, '');
+}));
+$('library-search-form').addEventListener('submit', event => { event.preventDefault(); return job('library-status', '正在搜索…', async () => {
+  library.query = $('library-search').value.trim(); await loadSources(0);
+}); });
+$('library-select-page').addEventListener('change', () => {
+  if (state.busy) return;
+  library.checked = new Set($('library-select-page').checked ? state.sources.map(source => source.id) : []);
+  renderSources(); controls();
+});
+$('library-delete').addEventListener('click', () => {
+  if (state.busy || !library.checked.size) return;
+  const rows = state.sources.filter(source => library.checked.has(source.id));
+  const description = rows.slice(0, 5).map(source => '• ' + source.title + ' · ' + source.author_name).join('\n');
+  if (!window.confirm(`从资料库删除选中的 ${rows.length} 条资料？\n\n${description}${rows.length > 5 ? '\n…' : ''}\n\n删除后不再用于新的阅读、问答和检索。历史任务与导出文件保留；重新导入相同资料可恢复。`)) return;
+  return job('library-status', '正在删除资料…', async () => {
+    const ids = rows.map(source => source.id);
+    const result = await request('/api/v1/sources/delete', {source_ids: ids});
+    if (state.selected && ids.includes(state.selected.id)) clearSelectedSource();
+    document.dispatchEvent(new CustomEvent('zhijing:sources-deleted', {detail: {source_ids: ids}}));
+    if (library.group) library.group.count = Math.max(0, library.group.count - result.deleted_count);
+    try { await loadSources(); status('library-status', `已删除 ${result.deleted_count} 条资料。`, 'success'); }
+    catch { library.checked.clear(); state.sources = state.sources.filter(source => !ids.includes(source.id)); renderSources(); status('library-status', '删除已完成，列表刷新失败，请点击刷新。', 'error'); }
+  });
+});
 $('prev-page').addEventListener('click', () => job('library-status', '正在读取…', () => loadSources(Math.max(0, state.page - 1))));
 $('next-page').addEventListener('click', () => job('library-status', '正在读取…', () => loadSources(state.page + 1)));
 $('import-form').addEventListener('submit', event => {
@@ -562,6 +970,7 @@ document.addEventListener('zhijing:sources-imported', async event => {
   const saved = event.detail?.saved;
   if (!Array.isArray(saved) || !saved.length) return;
   select(saved[0]);
+  resetLibrary();
   $('source-filter').value = '';
   try { await loadSources(0, ''); status('library-status', '已导入 ' + saved.length + ' 篇回答，并选中第一篇。', 'success'); }
   catch { status('library-status', '回答已保存并选中，资料列表暂未刷新；可稍后点击刷新。', 'error'); }
@@ -569,4 +978,9 @@ document.addEventListener('zhijing:sources-imported', async event => {
 if (tabs.includes(requestedTask)) tab(requestedTask);
 syncLibraryDrawer();
 mobileLayout?.addEventListener?.('change', syncLibraryDrawer);
-job('library-status', '正在读取资料库…', async () => { await refreshMode(); await loadSources(); await restoreSelectedSource(); });
+globalThis.addEventListener?.('hashchange', () => {
+  if (globalThis.location?.hash === '#companion') openWebImportPanel();
+});
+job('library-status', '正在读取资料库…', async () => { await refreshMode(); await loadSources(); await restoreSelectedSource(); }).then(() => {
+  if (globalThis.location?.hash === '#companion') return openWebImportPanel();
+});

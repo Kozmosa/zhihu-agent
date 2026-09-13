@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const tools = ['reading', 'author', 'cards', 'facts', 'knowledge'];
   const tabs = ['reading', 'author', 'cards', 'facts', 'opinions', 'knowledge'];
-  const storageKey = 'zhijing.companion.source.' + token;
+  const storageKey = 'zhijing.companion.source.' + document.currentScript.dataset.sessionId;
   const pageSize = 20;
   const state = {selected: null, revision: 0, sources: [], page: 0, more: false,
     loading: false, choosing: false, importing: false, pending: {}, cards: [], cardIndex: 0,
@@ -56,7 +56,7 @@
     let response;
     try {
       response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
-        headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+        headers: body === undefined ? {'X-Zhijing-Token': token} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
         body: body === undefined ? undefined : JSON.stringify(body)});
     } catch { throw new Error('暂时无法连接知境，请稍后重试。'); }
     if (response.ok && binary) return response.blob();
@@ -65,12 +65,15 @@
     if (!response.ok) {
       const messages = {model_unavailable: '分析服务暂不可用，请稍后重试或联系管理员。',
         model_timeout: '整理时间较长，请稍后重试。', model_invalid_response: '本次未能完整整理，请重试。',
+        model_output_truncated: '模型达到输出上限，未完成生成。请减少生成数量（制卡可先试 1～3 张），或在模型设置中提高最大输出 Token；使用思考模型时也可尝试关闭思考。',
+        cards_format_invalid: '模型返回的卡片格式或字段长度不符合要求。请先试生成 1～3 张，或换用支持 JSON 输出的模型。',
+        cards_evidence_invalid: '卡片证据无法在资料原文中找到，本次未生成卡片。请重试或换用其他模型。',
         model_input_too_large: '资料较长，请分段导入后重试。',
         model_context_exceeded: '资料较长，请分段导入后重试。',
         invalid_config_token: '本次连接已失效，请关闭知境后重新打开。'};
-      throw new Error(messages[result?.error?.code] || (response.status === 404
+      throw Object.assign(new Error(messages[result?.error?.code] || (response.status === 404
         ? '这条资料暂时无法找到，请刷新后重新选择。'
-        : response.status === 422 ? '请检查填写内容和长度后重试。' : '本次未能完成，请稍后重试。'));
+        : response.status === 422 ? '请检查填写内容和长度后重试。' : '本次未能完成，请稍后重试。')), {status: response.status});
     }
     return result;
   }
@@ -203,6 +206,11 @@
       state.sources = items.slice(0, pageSize);
       state.more = items.length > pageSize;
       state.page = page;
+      const selectedId = state.selected?.id, revision = state.revision;
+      if (selectedId && !items.some(source => source.id === selectedId)) {
+        try { await request('/api/v1/sources/' + encodeURIComponent(selectedId)); }
+        catch (error) { if (error.status === 404 && state.revision === revision) choose(null); }
+      }
       sourceOptions();
       status('companion-status', state.sources.length ? '' : '暂无资料，可以粘贴导入。');
     } catch (error) { status('companion-status', error.message, 'error'); }

@@ -67,15 +67,23 @@ class OllamaTransport:
             ) from None
         try:
             envelope = response.json()
-            text = envelope["response"]
-            if self.redactor.contains(response.text) or self.redactor.contains(str(text)):
+            if self.redactor.contains(response.text):
                 raise ValueError("Credential in model response")
-            if not isinstance(text, str) or not text.strip() or len(text) > 256_000:
-                raise ValueError("Invalid response text")
-            if envelope.get("done") is False or envelope.get("done_reason") in {
+            if isinstance(envelope, dict) and envelope.get("done_reason") in {
                 "length",
                 "max_tokens",
             }:
+                raise DomainError(
+                    "model_output_truncated",
+                    "模型达到输出上限，未完成生成。请减少生成数量，或在模型设置中提高最大输出 Token。",
+                    502,
+                )
+            text = envelope["response"]
+            if self.redactor.contains(str(text)):
+                raise ValueError("Credential in model response")
+            if not isinstance(text, str) or not text.strip() or len(text) > 256_000:
+                raise ValueError("Invalid response text")
+            if envelope.get("done") is False:
                 raise ValueError("Incomplete generation")
         except (ValueError, KeyError, TypeError, AttributeError):
             raise DomainError(

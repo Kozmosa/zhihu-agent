@@ -19,7 +19,10 @@ def test_cross_site_fetch_metadata_blocked_even_without_origin(client):
 
 
 def test_same_origin_and_local_scripts_continue(client):
-    for headers in ({}, {"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"}):
+    for headers in (
+        {},
+        {"Origin": str(client.base_url).rstrip("/"), "Sec-Fetch-Site": "same-origin"},
+    ):
         response = client.get("/api/v1/sources", headers=headers)
         assert response.status_code == 200
         assert response.headers["cache-control"] == "no-store"

@@ -12,8 +12,10 @@ from zhijing.features.reader.router import router as reader
 from zhijing.features.retrieval.router import router as retrieval
 from zhijing.features.runs.router import router as runs
 from zhijing.features.sources.router import router as sources
+from zhijing.features.zhihu.companion_router import router as zhihu_companion
 from zhijing.features.zhihu.question_router import router as zhihu_questions
 from zhijing.features.zhihu.router import router as zhihu
+from zhijing.features.zhihu.web_router import router as zhihu_web
 
 router = APIRouter(prefix="/api/v1")
 for feature_router in (
@@ -29,5 +31,7 @@ for feature_router in (
     runs,
     zhihu,
     zhihu_questions,
+    zhihu_web,
+    zhihu_companion,
 ):
     router.include_router(feature_router)

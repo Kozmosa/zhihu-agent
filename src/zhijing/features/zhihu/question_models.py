@@ -46,6 +46,30 @@ def question_id_from_url(url: str) -> str:
     return normalize_question_url(url).rsplit("/", 1)[1]
 
 
+def normalize_author_url(url: str) -> str:
+    path = _official_parts(url).path.rstrip("/")
+    if path.endswith("/answers"):
+        path = path[:-8]
+    match = AUTHOR_PATH.fullmatch(path)
+    if match is None:
+        raise ValueError("A Zhihu author profile URL is required")
+    return f"https://www.zhihu.com/{match[1]}/{match[2]}/answers"
+
+
+def collection_target(url: str) -> dict[str, str]:
+    try:
+        normalized = normalize_question_url(url)
+        return {
+            "mode": "question",
+            "url": normalized,
+            "question_id": question_id_from_url(normalized),
+        }
+    except ValueError:
+        normalized = normalize_author_url(url)
+        kind, name = urlsplit(normalized).path.strip("/").split("/")[:2]
+        return {"mode": "author", "url": normalized, "author_id": f"{kind}:{name}"}
+
+
 def _numeric_identifier(value) -> str:
     if not isinstance(value, str) or not re.fullmatch(r"[0-9]{1,30}", value):
         raise ValueError("Invalid answer identifier")
@@ -71,7 +95,8 @@ def _text(value, maximum: int, *, required: bool = True) -> str:
 def raw_answer_to_draft(raw: dict, question_url: str) -> SourceDraft:
     if not isinstance(raw, dict):
         raise ValueError("Invalid answer")
-    question_id = question_id_from_url(question_url)
+    target = collection_target(question_url)
+    question_id = target.get("question_id") or _numeric_identifier(raw.get("question_id"))
     answer_id = _numeric_identifier(raw.get("answer_id"))
     if _numeric_identifier(raw.get("question_id")) != question_id:
         raise ValueError("Answer belongs to another question")
@@ -91,6 +116,8 @@ def raw_answer_to_draft(raw: dict, question_url: str) -> SourceDraft:
             author_id = "zhihu-author:" + external_author_id
     except ValueError:
         pass
+    if target["mode"] == "author" and external_author_id != target["author_id"]:
+        raise ValueError("Answer belongs to another author or lacks author identity")
     return SourceDraft(
         title=title,
         author_id=author_id,
@@ -124,3 +151,4 @@ class QuestionJobView(Schema):
     message: str
     items: list[SourceDraft] = Field(max_length=20)
     terminal: bool
+    mode: Literal["question", "author"] = "question"

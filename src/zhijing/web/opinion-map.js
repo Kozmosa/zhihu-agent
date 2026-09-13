@@ -111,7 +111,7 @@
     function invalidateResult() { state.flowCleanup?.(); state.flowCleanup = null; state.result = null; results.replaceChildren(); }
     async function request(path, body, signal) {
       const response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', cache: 'no-store', signal,
-        headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+        headers: body === undefined ? {'X-Zhijing-Token': token} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
         body: body === undefined ? undefined : JSON.stringify(body)});
       let data;
       try { data = await response.json(); } catch { throw new Error('服务返回内容无法读取，请稍后重试。'); }

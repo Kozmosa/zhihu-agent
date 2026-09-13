@@ -81,6 +81,12 @@ class OpenAICompatibleTransport:
             ) from None
         try:
             choice = response.json()["choices"][0]
+            if choice.get("finish_reason") == "length":
+                raise DomainError(
+                    "model_output_truncated",
+                    "模型达到输出上限，未完成生成。请减少生成数量，或在模型设置中提高最大输出 Token。",
+                    502,
+                )
             text = choice["message"]["content"]
             if self.redactor.contains(response.text) or self.redactor.contains(str(text)):
                 raise ValueError("Credential in model response")

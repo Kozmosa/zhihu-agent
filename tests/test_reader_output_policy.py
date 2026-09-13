@@ -98,7 +98,7 @@ def test_both_transports_enforce_style_schema_without_changing_source(provider, 
         return httpx.Response(200, json=response)
 
     with httpx.Client(
-        transport=httpx.MockTransport(respond), base_url="http://model.test/"
+        transport=httpx.MockTransport(respond), base_url="https://model.test/"
     ) as client:
         model_type = OllamaGenerator if provider == "ollama" else OpenAICompatibleGenerator
         generator = model_type(client, "test-model")

@@ -28,7 +28,7 @@
     try {
       response = await fetch(path, {
         method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
-        headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+        headers: body === undefined ? {'X-Zhijing-Token': token} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch { throw new Error('无法连接本地服务，请确认服务仍在运行。'); }

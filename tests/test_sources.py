@@ -3,14 +3,21 @@ from fastapi.testclient import TestClient
 
 from zhijing.app import create_app
 from zhijing.core.config import Settings
+from zhijing.local_auth import connect_local_client
 
 
 def test_import_is_idempotent_and_persistent(tmp_path, sample):
     settings = Settings(data_dir=tmp_path)
-    with TestClient(create_app(settings)) as client:
+    with TestClient(
+        create_app(settings), base_url="http://127.0.0.1", client=("127.0.0.1", 12345)
+    ) as client:
+        connect_local_client(client)
         first = client.post("/api/v1/sources/import", json=sample).json()
         assert client.post("/api/v1/sources/import", json=sample).json() == first
-    with TestClient(create_app(settings)) as client:
+    with TestClient(
+        create_app(settings), base_url="http://127.0.0.1", client=("127.0.0.1", 12345)
+    ) as client:
+        connect_local_client(client)
         assert len(client.get("/api/v1/sources").json()) == 3
         assert client.get(f"/api/v1/sources/{first[0]['id']}").json() == first[0]
 

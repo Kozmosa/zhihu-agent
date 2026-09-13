@@ -14,7 +14,7 @@ from pathlib import Path
 
 from zhijing.core.errors import DomainError
 from zhijing.domain.models import SourceDraft
-from zhijing.features.zhihu.question_models import normalize_question_url, raw_answer_to_draft
+from zhijing.features.zhihu.question_models import collection_target, raw_answer_to_draft
 
 MAX_RESULT_BYTES = 8 * 1024 * 1024
 MAX_DURATION_SECONDS = 10 * 60
@@ -93,12 +93,14 @@ class QuestionJobs:
 
     def start(self, url: str, count: int = 10) -> dict:
         try:
-            normalized = normalize_question_url(url)
+            normalized = collection_target(url)["url"]
             if type(count) is not int or not 1 <= count <= 20:
                 raise ValueError("Invalid count")
         except (ValueError, TypeError):
             raise DomainError(
-                "invalid_zhihu_question", "请输入有效的知乎问题链接，读取数量为 1 到 20 条。", 422
+                "invalid_zhihu_question",
+                "请输入有效的知乎问题或作者主页链接，读取数量为 1 到 20 条。",
+                422,
             ) from None
         with self._lock:
             if self._closed:
@@ -335,4 +337,5 @@ class QuestionJobs:
             "message": message,
             "items": [draft.model_dump(mode="json") for draft in job.items.values()],
             "terminal": job.status in TERMINAL,
+            "mode": collection_target(job.url)["mode"],
         }

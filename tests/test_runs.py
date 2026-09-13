@@ -312,7 +312,12 @@ def test_frozen_corpus_ignores_later_imports_and_library_scope_is_explicit(
 
 def test_restart_recovers_running_but_preserves_pending_and_results(tmp_path, sample):
     settings = Settings(data_dir=tmp_path)
-    with TestClient(create_app(settings)) as first:
+    from zhijing.local_auth import connect_local_client
+
+    with TestClient(
+        create_app(settings), base_url="http://127.0.0.1", client=("127.0.0.1", 12345)
+    ) as first:
+        connect_local_client(first)
         imported = first.post("/api/v1/sources/import", json=sample).json()
         pending = create(first, body(imported, prepare_only=True), "pending").json()
         interrupted = create(first, body(imported, prepare_only=True), "interrupted").json()
@@ -328,7 +333,10 @@ def test_restart_recovers_running_but_preserves_pending_and_results(tmp_path, sa
         # Rebuilding storage for a model switch must never perform crash recovery.
         SQLiteRunRepository(tmp_path / "runs.sqlite3").initialize()
         assert runs.get(interrupted["id"]).status == "running"
-    with TestClient(create_app(settings)) as second:
+    with TestClient(
+        create_app(settings), base_url="http://127.0.0.1", client=("127.0.0.1", 12345)
+    ) as second:
+        connect_local_client(second)
         assert second.get(f"/api/v1/runs/{pending['id']}").json()["status"] == "pending"
         recovered = second.get(f"/api/v1/runs/{interrupted['id']}").json()
         assert recovered["status"] == "interrupted"

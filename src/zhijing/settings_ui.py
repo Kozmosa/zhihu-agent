@@ -74,9 +74,20 @@ def guard(request: Request):
     origin = request.headers.get("origin")
     if origin and origin != str(request.base_url).rstrip("/"):
         raise DomainError("invalid_origin", "请从本机配置页操作。", 403)
-    if request.method == "POST":
+    foreign_site = request.headers.get("sec-fetch-site") in {"cross-site", "same-site"}
+    public_navigation = (
+        request.method in {"GET", "HEAD"}
+        and request.url.path in {"/", "/workspace"}
+        and request.headers.get("sec-fetch-mode") == "navigate"
+        and request.headers.get("sec-fetch-dest") == "document"
+    )
+    if foreign_site and not public_navigation:
+        raise DomainError("invalid_origin", "请从本机知境页面操作。", 403)
+    if request.url.path.startswith("/api/v1/") or request.method not in {"GET", "HEAD", "OPTIONS"}:
         token = request.headers.get("x-zhijing-token", "")
-        if not secrets.compare_digest(token, request.app.state.config_token):
+        if not secrets.compare_digest(
+            token.encode("utf-8"), request.app.state.config_token.encode()
+        ):
             raise DomainError("invalid_config_token", "页面会话已失效，请刷新配置页。", 403)
 
 
@@ -95,14 +106,17 @@ def render_page(request: Request, filename: str, *, desktop: bool = False):
     template = web.joinpath(filename).read_text("utf-8")
     widget = "" if desktop else web.joinpath("chat.html").read_text("utf-8")
     # Insert first so shared scripts receive the same nonce as the page and its CSP.
+    nonce = secrets.token_urlsafe(32)
     template = template.replace("__CHAT_WIDGET__", widget)
     template = template.replace("__DESKTOP__", "true" if desktop else "false")
     return HTMLResponse(
-        template.replace("__CONFIG_TOKEN__", request.app.state.config_token),
+        template.replace("__CONFIG_TOKEN__", request.app.state.config_token)
+        .replace("__CSP_NONCE__", nonce)
+        .replace("__SESSION_ID__", request.app.state.session_id),
         headers={
             "Cache-Control": "no-store",
             "Content-Security-Policy": "default-src 'self'; script-src 'nonce-"
-            + request.app.state.config_token
+            + nonce
             + "'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
             "Referrer-Policy": "no-referrer",
             "X-Content-Type-Options": "nosniff",
@@ -145,6 +159,7 @@ def workspace_asset(filename: str):
         "opinion-map.css",
         "opinion-flow.js",
         "opinion-flow.css",
+        "zhihu-companion.user.js",
     }:
         raise DomainError("asset_not_found", "未找到页面资源。", 404)
     return FileResponse(

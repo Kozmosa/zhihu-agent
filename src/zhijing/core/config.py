@@ -4,6 +4,7 @@ import ipaddress
 import math
 import os
 from dataclasses import dataclass, field
+from ipaddress import ip_address
 from pathlib import Path
 from typing import ClassVar
 from urllib.parse import urlsplit
@@ -88,14 +89,22 @@ class Settings:
             valid_url = (
                 url.scheme in {"http", "https"}
                 and url.hostname
-                and not (url.username or url.password or url.query or url.fragment)
+                and url.username is None
+                and url.password is None
+                and not (url.query or url.fragment)
             )
-            valid_url = valid_url and not any(c.isspace() for c in self.ollama_url)
+            valid_url = valid_url and not any(
+                c.isspace() or ord(c) < 32 or ord(c) == 127 or c == "\\" for c in self.ollama_url
+            )
             if url.path.rstrip("/").endswith(("/api/generate", "/api/chat", "/chat/completions")):
                 errors.append(
                     "ZHIJING_OLLAMA_URL must be a base URL, not a generate/chat endpoint."
                 )
             _ = url.port
+            if valid_url and url.scheme == "http" and not _loopback_host(url.hostname):
+                errors.append(
+                    "ZHIJING_OLLAMA_URL must use HTTPS unless the host is localhost or a loopback IP."
+                )
         except ValueError:
             valid_url = False
         if not valid_url:
@@ -196,3 +205,16 @@ def model_profile(settings: Settings) -> dict[str, str]:
         if key.startswith(prefix):
             profile[key] = str(getattr(settings, key.removeprefix("ZHIJING_").lower()))
     return profile
+
+
+def _loopback_host(host: str) -> bool:
+    # No DNS resolution: local-looking suffixes and private LAN addresses are not loopback.
+    if host.lower() == "localhost":
+        return True
+    if "%" in host:
+        return False
+    try:
+        address = ip_address(host)
+        return address.is_loopback and getattr(address, "ipv4_mapped", None) is None
+    except ValueError:
+        return False

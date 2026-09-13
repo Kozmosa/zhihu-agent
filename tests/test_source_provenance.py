@@ -94,7 +94,7 @@ def test_legacy_payload_loads_without_fulltext_claim_or_duplicate_on_reimport(tm
     repository.initialize()
     with closing(sqlite3.connect(repository.path)) as connection, connection:
         connection.execute(
-            "INSERT INTO sources VALUES (?, ?, ?)",
+            "INSERT INTO sources (id, author_id, payload) VALUES (?, ?, ?)",
             (legacy_id, legacy["author_id"], json.dumps(payload, ensure_ascii=False)),
         )
     stored = repository.get(legacy_id)

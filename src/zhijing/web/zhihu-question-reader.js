@@ -1,6 +1,7 @@
 (() => {
   'use strict';
   const request = __ZHIHU_READER_REQUEST__;
+  const authorMode = request.mode === 'author';
   const hosts = new Set(['www.zhihu.com', 'zhihu.com', 'm.zhihu.com']);
   const visible = node => !!node && node.getClientRects().length > 0 &&
     getComputedStyle(node).visibility !== 'hidden' && getComputedStyle(node).display !== 'none';
@@ -30,7 +31,9 @@
       (document.body?.innerText.length < 4000 && /(?:请求异常|访问受限|访问过于频繁|请完成安全验证|请求存在异常)/.test(document.body?.innerText || '')));
   if (unavailable) { result.state = 'needs_login'; result.reason = 'page_unavailable'; return result; }
   const pageMatch = here.pathname.match(/^\/question\/([0-9]{1,30})(?:\/answer\/[0-9]{1,30})?\/?$/);
-  if (!pageMatch || pageMatch[1] !== request.question_id) { result.state = 'away'; return result; }
+  const profileMatch = here.pathname.match(/^\/(people|org)\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/answers)?\/?$/);
+  if (authorMode ? !profileMatch || profileMatch[1] + ':' + profileMatch[2] !== request.author_id
+    : !pageMatch || pageMatch[1] !== request.question_id) { result.state = 'away'; return result; }
   result.state = 'reading';
   const title = tidy(document.querySelector('.QuestionHeader-title')?.innerText ||
     document.querySelector('h1')?.innerText || document.title).slice(0, 2000) || '知乎问题';
@@ -42,18 +45,20 @@
     try { zop = JSON.parse(answer.getAttribute('data-zop') || '{}'); } catch { /* DOM metadata is optional. */ }
     const rawId = String(zop.itemId || '');
     let answerId = '';
+    let questionId = '';
     let conflicting = false;
     const links = answer.querySelectorAll('meta[itemprop="url"], .ContentItem-time a[href*="/answer/"], a[itemprop="url"]');
     for (const link of links) {
       const permalink = url(link.getAttribute('content') || link.getAttribute('href'));
       const match = permalink?.pathname.match(/^\/question\/([0-9]{1,30})\/answer\/([0-9]{1,30})\/?$/);
       if (!match) continue;
-      if (match[1] !== request.question_id || (answerId && answerId !== match[2])) conflicting = true;
+      if ((!authorMode && match[1] !== request.question_id) || (questionId && questionId !== match[1]) || (answerId && answerId !== match[2])) conflicting = true;
+      questionId = match[1];
       answerId = match[2];
     }
     if (conflicting || (answerId && rawId && rawId !== answerId)) continue;
-    if (!answerId && /^[0-9]{1,30}$/.test(rawId) && (!zop.type || /answer/i.test(zop.type)) &&
-      answer.closest('.Question-mainColumn, .QuestionAnswers-answers, .Answers-defaultList')) answerId = rawId;
+    if (!authorMode && !answerId && /^[0-9]{1,30}$/.test(rawId) && (!zop.type || /answer/i.test(zop.type)) &&
+      answer.closest('.Question-mainColumn, .QuestionAnswers-answers, .Answers-defaultList')) { answerId = rawId; questionId = request.question_id; }
     if (!/^[0-9]{1,30}$/.test(answerId) || seen.has(answerId)) continue;
     const rich = answer.querySelector('.RichContent');
     const body = answer.querySelector('.RichContent-inner .RichText') ||
@@ -83,10 +88,21 @@
         authorUrl = 'https://www.zhihu.com' + candidate.pathname.replace(/\/$/, ''); break;
       }
     }
+    if (authorMode && authorUrl !== 'https://www.zhihu.com/' + request.author_id.replace(':', '/')) { result.skipped++; continue; }
+    let questionTitle = title;
+    if (authorMode) {
+      questionTitle = '';
+      for (const link of answer.querySelectorAll('.ContentItem-title a[href], h2 a[href]')) {
+        const target = url(link.getAttribute('href'));
+        const match = target?.pathname.match(/^\/question\/([0-9]{1,30})(?:\/answer\/[0-9]{1,30})?\/?$/);
+        if (match && match[1] === questionId) { questionTitle = tidy(link.innerText).slice(0, 2000); break; }
+      }
+      if (!questionTitle) { result.skipped++; continue; }
+    }
     seen.add(answerId);
-    result.items.push({answer_id: answerId, question_id: request.question_id, title,
+    result.items.push({answer_id: answerId, question_id: questionId, title: questionTitle,
       author_name: tidy(author?.innerText).slice(0, 2000) || '未署名', author_url: authorUrl,
-      text, url: `https://www.zhihu.com/question/${request.question_id}/answer/${answerId}`});
+      text, url: `https://www.zhihu.com/question/${questionId}/answer/${answerId}`});
     if (result.items.length >= Math.min(20, request.count)) break;
   }
   if (!result.expanded && result.items.length < request.count) {

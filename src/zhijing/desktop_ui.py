@@ -7,6 +7,7 @@ import queue
 import sys
 import threading
 import tkinter as tk
+import webbrowser
 from pathlib import Path
 from tkinter import messagebox
 from typing import Any
@@ -33,6 +34,7 @@ class DesktopAssistant:
         self._ready = False
         self._starting = False
         self._pending_open = False
+        self._pending_page = None
         self._events: queue.Queue = queue.Queue()
         self._drag: tuple[int, int, int, int] | None = None
         self._dragged = False
@@ -40,10 +42,18 @@ class DesktopAssistant:
         self.menu = tk.Menu(self.root, tearoff=False, font=("Microsoft YaHei UI", 10))
         self.menu.add_command(label="打开知境", command=self.show_chat)
         self.menu.add_command(label="收起", command=self.hide_chat)
+        self.menu.add_command(
+            label="采集知乎资料", command=lambda: self._open_service_page("/workspace#companion")
+        )
+        self.menu.add_command(
+            label="打开工作台", command=lambda: self._open_service_page("/workspace")
+        )
+        self.menu.add_command(label="模型设置", command=lambda: self._open_service_page("/admin"))
         self.menu.add_separator()
         self._animate = tk.BooleanVar(master=self.root, value=True)
         self.menu.add_checkbutton(
-            label="桌宠动画", variable=self._animate,
+            label="桌宠动画",
+            variable=self._animate,
             command=lambda: self.animation.set_enabled(self._animate.get()),
         )
         self.menu.add_separator()
@@ -89,8 +99,7 @@ class DesktopAssistant:
         self.ball.bind("<Button-3>", self._show_menu)
         left, top, right, bottom = self._screen_bounds()
         self.root.geometry(
-            f"{self.ball_size}x{self.ball_size}"
-            f"{max(left, right - 92):+d}{max(top, bottom - 92):+d}"
+            f"{self.ball_size}x{self.ball_size}{max(left, right - 92):+d}{max(top, bottom - 92):+d}"
         )
 
     def _show_menu(self, event) -> None:
@@ -153,6 +162,14 @@ class DesktopAssistant:
 
         threading.Thread(target=start, name="zhijing-desktop-start", daemon=True).start()
 
+    def _open_service_page(self, path: str) -> None:
+        if self._ready:
+            self._pending_page = None
+            webbrowser.open(self.service.base_url + path)
+        else:
+            self._pending_page = path
+            self._start_service()
+
     def show_chat(self) -> None:
         self._pending_open = True
         if self._ready:
@@ -185,6 +202,8 @@ class DesktopAssistant:
             ready, error = self._events.get_nowait()
             self._starting = False
             self._ready = ready
+            if ready and self._pending_page:
+                self._open_service_page(self._pending_page)
             if ready and self._pending_open:
                 self.show_chat()
             elif error:

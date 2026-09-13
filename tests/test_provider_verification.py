@@ -52,7 +52,7 @@ def test_upstream_http_success_is_distinct_from_evidence_validation_and_continue
     assert report["admission"] == "rejected"
     failed = report["cases"][1]
     assert failed["capability"] == "cards"
-    assert failed["reason"] == "model_invalid_response"
+    assert failed["reason"] == "cards_evidence_invalid"
     assert failed["transport"]["http_success_received"] is True
     assert failed["application_validation_passed"] is False
     assert failed["http_status"] == 502
