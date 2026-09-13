@@ -11,7 +11,7 @@ const webImport = {configured: false, results: [], signature: '', origin: 'web',
 const companion = {paired: false, items: []};
 const webCriteriaIds = ['web-mode', 'web-url', 'web-min-votes', 'web-max-items'];
 const pageSize = 20;
-const library = {view: 'all', group: null, groups: [], query: '', checked: new Set()};
+const library = {view: 'question', group: null, groups: [], query: '', checked: new Set()};
 const mobileLayout = globalThis.matchMedia?.('(max-width: 720px)');
 let mapCleanup = null, mapRevision = 0;
 let opinionOpenRevision = 0;
@@ -275,12 +275,17 @@ function renderSources() {
   const grouping = library.view !== 'all' && library.group === null;
   $('library-selection').hidden = grouping;
   $('library-back').hidden = library.group === null;
-  $('library-scope').textContent = library.group ? library.group.name + ' · ' + library.group.count + ' 条资料' : '';
+  const questionGroup = library.view === 'question' && Boolean(library.group?.key);
+  $('library-back').textContent = library.view === 'question' ? '← 返回全部问题' : '← 返回全部作者';
+  $('library-scope').textContent = library.group ? library.group.name + ' · ' + library.group.count + (questionGroup ? ' 篇回答' : ' 条资料') : (library.view === 'question' ? '先选问题，再查看不同作者的回答' : '');
+  $('library-search').placeholder = grouping ? (library.view === 'question' ? '搜索问题标题或问题 ID' : '搜索作者姓名或作者 ID') : '搜索问题、作者或正文';
   if (grouping) {
-    if (!library.groups.length) list.append(element('p', '没有匹配的分组。', 'empty'));
+    if (!library.groups.length) list.append(element('p', library.query ? '没有匹配的分组。请尝试其他关键词。' : '资料库还是空的。点击“导入资料”开始。', 'empty'));
     for (const group of library.groups) {
       const button = element('button', undefined, 'source-item library-group'); button.type = 'button';
-      button.append(element('strong', group.name), element('small', group.count + ' 条资料 · ' + (group.key || '暂无问题链接')));
+      const isQuestion = library.view === 'question' && Boolean(group.key);
+      button.append(element('span', isQuestion ? '问题' : library.view === 'author' ? '作者' : '其他资料', 'library-group-kind'), element('strong', group.name), element('small', group.count + (isQuestion ? ' 篇回答 · 问题 ' + group.key + ' →' : ' 条资料' + (group.key ? ' · ' + group.key : '') + ' →')));
+      button.setAttribute('aria-label', (isQuestion ? '问题：' : '') + group.name + '，' + group.count + (isQuestion ? ' 篇回答' : ' 条资料'));
       button.addEventListener('click', () => job('library-status', '正在读取分组…', async () => {
         library.group = group; library.query = ''; $('library-search').value = '';
         await loadSources(0, library.view === 'author' ? group.key : '');
@@ -295,7 +300,8 @@ function renderSources() {
     const button = element('button', undefined, 'source-item');
     button.type = 'button';
     button.setAttribute('aria-pressed', String(state.selected?.id === source.id));
-    button.append(element('strong', source.title), element('small', source.author_name + ' · ' + source.text.length + ' 字符' + (source.content_extent === 'excerpt' ? ' · 摘要' : source.origin === 'zhihu' && source.content_extent === 'unknown' ? ' · 完整性未核验' : '')));
+    button.append(element('strong', questionGroup ? source.author_name + '的回答' : source.title), element('small', source.author_name + ' · ' + source.text.length + ' 字符' + (source.content_extent === 'excerpt' ? ' · 摘要' : source.origin === 'zhihu' && source.content_extent === 'unknown' ? ' · 完整性未核验' : '')));
+    if (questionGroup) button.append(element('span', source.text.replace(/\s+/g, ' ').slice(0, 100), 'library-answer-preview'));
     button.addEventListener('click', () => { if (!state.busy) select(source); });
     const row = element('div', undefined, 'library-source-row');
     const checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = library.checked.has(source.id);
@@ -318,6 +324,7 @@ async function loadSources(page = state.page, filter = state.filter) {
   if (library.view !== 'all' && library.group === null) {
     params.set('by', library.view); params.set('q', library.query); params.set('limit', String(pageSize));
     const groups = await request('/api/v1/sources/groups?' + params);
+    if (!groups.items.length && page > 0) return loadSources(page - 1, '');
     library.groups = groups.items; state.sources = []; state.page = page; state.more = groups.has_more; state.filter = '';
     renderSources(); status('library-status', `${groups.total} 个${library.view === 'author' ? '作者' : '问题'}分组`); return;
   }
@@ -336,9 +343,9 @@ async function loadSources(page = state.page, filter = state.filter) {
   status('library-status', '');
 }
 
-function resetLibrary() {
-  library.view = 'all'; library.group = null; library.query = ''; library.checked.clear();
-  $('library-view').value = 'all'; $('library-search').value = '';
+function resetLibrary(view = library.view) {
+  library.view = view; library.group = null; library.query = ''; library.checked.clear();
+  $('library-view').value = view; $('library-search').value = '';
 }
 
 function clearSelectedSource() {
@@ -668,14 +675,32 @@ function renderWebResults(items) {
   const root = $('web-results');
   root.replaceChildren();
   webImport.results = [];
+  const questionGroups = new Map();
   if (!items.length) root.append(element('div', '本次没有符合条件且可读取正文的回答。可调整赞同数或更换链接后重试。', 'empty'));
   for (const item of items) {
     const source = item.draft;
+    let questionId = null;
+    try {
+      const url = new URL(source.provenance?.canonical_url || source.url);
+      if (url.protocol === 'https:' && ['www.zhihu.com', 'zhihu.com'].includes(url.hostname) && !url.username && !url.password && !url.port) {
+        questionId = url.pathname.match(/^\/question\/(\d+)(?:\/answer\/\d+)?\/?$/)?.[1] || null;
+      }
+    } catch { /* Unassociated articles remain individual previews. */ }
+    let group = questionId && questionGroups.get(questionId);
+    if (questionId && !group) {
+      const section = element('section', undefined, 'web-question-group');
+      const header = element('div', undefined, 'web-question-heading');
+      const count = element('span', '', 'muted small');
+      header.append(element('span', '问题', 'library-group-kind'), element('h3', source.title), count);
+      section.append(header); root.append(section);
+      group = {section, count, size: 0}; questionGroups.set(questionId, group);
+    }
+    if (group) { group.size++; group.count.textContent = `${group.size} 篇回答 · 问题 ${questionId} · 勾选后导入`; }
     const article = element('article', undefined, 'zhihu-result web-result');
     const heading = element('label', undefined, 'web-result-heading');
     const checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = true;
     checkbox.setAttribute('aria-label', '选择回答：' + source.title + ' · ' + source.author_name);
-    heading.append(checkbox, element('span', source.title, 'zhihu-result-title'));
+    heading.append(checkbox, element('span', group ? source.author_name + '的回答' : source.title, 'zhihu-result-title'));
     const importedLabel = element('span', '可导入', 'badge');
     const meta = element('div', undefined, 'zhihu-result-meta');
     const votes = item.voteup_count == null ? '赞同数未知' : `${item.voteup_count} 赞同`;
@@ -693,7 +718,7 @@ function renderWebResults(items) {
       controls();
     });
     webImport.results.push(result);
-    root.append(article);
+    (group ? group.section : root).append(article);
   }
   controls();
 }
@@ -778,7 +803,7 @@ function importWebSelection() {
     }
     // Even a lost response can follow a successful write; refresh without replacing
     // the batch outcome or sending its full answer payload to the chat widget.
-    try { await loadSources(0, ''); $('source-filter').value = ''; }
+    try { resetLibrary(); await loadSources(0, ''); $('source-filter').value = ''; }
     catch (error) { status('library-status', '导入状态见批量面板。资料列表刷新失败：' + error.message, 'error'); }
   });
 }
@@ -880,7 +905,7 @@ $('zhihu-search-form').addEventListener('submit', event => {
   });
 });
 $('reload-sources').addEventListener('click', () => job('library-status', '正在刷新…', async () => { await refreshMode(); await loadSources(); }));
-$('source-filter-form').addEventListener('submit', event => { event.preventDefault(); return job('library-status', '正在筛选…', () => { resetLibrary(); return loadSources(0, $('source-filter').value.trim()); }); });
+$('source-filter-form').addEventListener('submit', event => { event.preventDefault(); return job('library-status', '正在筛选…', () => { resetLibrary('all'); return loadSources(0, $('source-filter').value.trim()); }); });
 $('library-view').addEventListener('change', () => job('library-status', '正在读取分组…', async () => {
   library.view = $('library-view').value; library.group = null; library.query = ''; $('library-search').value = ''; $('source-filter').value = '';
   await loadSources(0, '');

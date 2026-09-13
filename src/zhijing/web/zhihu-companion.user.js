@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         知乎伴侣·知境版
 // @namespace    zhijing.local/zhihu-companion
-// @version      0.8.3
+// @version      0.8.4
 // @description  读取已打开的知乎页面，批量筛选回答并送入本机知境预览；保留原版 Markdown、JSON、点击提取能力。
 // @author       Kozmosa（原版 0.8.2）；知境本地适配
 // @match        https://www.zhihu.com/*
@@ -1719,7 +1719,20 @@ function openCollectionPanel() {
   if (document.getElementById('__zhijing_collect_panel__')) return;
   const panel = document.createElement('div'); panel.id = '__zhijing_collect_panel__';
   Object.assign(panel.style, { position: 'fixed', right: '220px', top: '80px', width: '320px', maxWidth: '80vw', maxHeight: '80vh', overflow: 'auto', padding: '18px', background: '#fff', color: '#333', border: '1px solid #ccc', borderRadius: '10px', zIndex: 100002, boxShadow: '0 4px 20px #0003', font: '14px/1.6 system-ui' });
-  panel.innerHTML = '<strong>批量收集并送入知境</strong><p>读取当前问题或作者页实际加载的内容。结果先送入知境预览。</p><label>最低赞同 <input id="__zj_votes__" type="number" min="0" max="1000000000" value="0" style="width:100px"></label><br><label>最多篇数 <input id="__zj_limit__" type="number" min="1" max="100" value="20" style="width:100px"></label><p><label><input id="__zj_scroll__" type="checkbox"> 自动展开并滚动加载（最多 20 轮、45 秒）</label></p><p style="font-size:12px">折叠、付费或未确认完整的内容会标注完整性；只收集当前作者本人。遇到登录或验证请在网页正常完成。</p>';
+  panel.innerHTML = '<strong>批量收集并送入知境</strong><p>读取当前问题或作者页实际加载的内容。结果先送入知境预览。</p><label>最低赞同 <input id="__zj_votes__" type="number" min="0" max="1000000000" value="0" style="width:100px"></label><br><label>最多篇数 <input id="__zj_limit__" type="number" min="1" max="100" value="20" style="width:100px"></label><p><label><input id="__zj_scroll__" type="checkbox"> 自动展开并滚动加载（最多 20 轮、45 秒）</label></p><p style="font-size:12px">折叠、付费或未确认完整的内容会标注完整性；作者页只收集该作者本人；问题页可收集多位作者。遇到登录或验证请在网页正常完成。</p>';
+  const scopeLabel = document.createElement('p'); scopeLabel.id = '__zj_scope__';
+  const connectionLabel = document.createElement('p'); connectionLabel.id = '__zj_connection__';
+  const updateScope = () => {
+    try {
+      const scope = pageScope();
+      const title = (document.querySelector('.QuestionHeader-title')?.textContent || '').trim();
+      scopeLabel.textContent = scope.scope === 'question' ? '当前问题：' + (title || scope.scope_id) + '（可收集多位作者的回答）' : scope.scope === 'author' ? '当前作者：' + scope.scope_id + '（仅收集本人回答，送入知境后按问题预览）' : '当前专栏文章';
+    } catch (error) { scopeLabel.textContent = error.message; }
+  };
+  updateScope();
+  try { connectionLabel.textContent = '已保存连接：' + getConnection().base_url + ' · 发送时验证'; }
+  catch { connectionLabel.textContent = '尚未连接知境。请先在知境的「浏览器采集」中打开连接页。'; }
+  panel.append(scopeLabel, connectionLabel);
   const status = document.createElement('p'); status.setAttribute('role', 'status');
   const start = createBtn('开始收集并发送', '#be602a', async () => {
     if (collectionJob) { status.textContent = '另一次采集正在进行。'; return; }
@@ -1727,6 +1740,8 @@ function openCollectionPanel() {
     const maxItems = Number(panel.querySelector('#__zj_limit__').value);
     if (!Number.isInteger(minimumVotes) || minimumVotes < 0 || minimumVotes > 1000000000 || !Number.isInteger(maxItems) || maxItems < 1 || maxItems > 100) { status.textContent = '请输入有效赞同数，以及 1～100 的篇数。'; return; }
     const job = { cancelled: false, cache: new Map() }; collectionJob = job; start.disabled = true;
+    const inputs = [...panel.querySelectorAll('input')]; inputs.forEach(input => { input.disabled = true; });
+    updateScope();
     try {
       getConnection();
       const scope = pageScope();
@@ -1749,7 +1764,7 @@ function openCollectionPanel() {
         }
         if (job.cancelled) break;
         collected = gatherItems(scope, minimumVotes, maxItems, job.cache);
-        status.textContent = `已收集 ${collected.items.length} 篇；第 ${step + 1} 轮。`;
+        status.textContent = `已筛选 ${collected.items.length} / ${maxItems} 篇回答（已去重）；第 ${step + 1} 轮。`;
         if (!auto || collected.items.length >= maxItems) break;
         const signature = job.cache.size + ':' + document.documentElement.scrollHeight;
         stagnant = signature === previousSignature ? stagnant + 1 : 0; previousSignature = signature;
@@ -1759,9 +1774,11 @@ function openCollectionPanel() {
       }
       if (job.cancelled) { status.textContent = '已取消，未发送本次内容。'; return; }
       const result = await deliver(scope, collected.items);
-      status.textContent = `已发送 ${result.count} 篇。请回知境预览导入；不符合条件、无法确定来源的卡片已跳过。`;
+      connectionLabel.textContent = '连接正常：已送达知境';
+      const questions = new Set(collected.items.map(item => item.question_id).filter(Boolean));
+      status.textContent = `已发送 ${result.count} 篇${questions.size ? '，涉及 ' + questions.size + ' 个问题' : ''}。请回知境按问题预览并勾选导入；本次仅覆盖已加载且符合条件的内容。`;
     } catch (error) { status.textContent = error.message || '采集失败，请重试。'; }
-    finally { if (collectionJob === job) collectionJob = null; start.disabled = false; }
+    finally { if (collectionJob === job) collectionJob = null; start.disabled = false; inputs.forEach(input => { input.disabled = false; }); }
   });
   const cancel = createBtn('取消／关闭', '#5c6b7a', () => {
     if (collectionJob) { collectionJob.cancelled = true; status.textContent = '正在取消采集；若已开始发送，请等待接收结果。'; }

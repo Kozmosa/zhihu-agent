@@ -359,3 +359,13 @@ body[data-desktop=true] .tabs { position: sticky; top: 0; z-index: 5; background
 #library-view {width:100%}
 #library-search-form {margin-top:10px}
 .library-selection[hidden] {display:none}
+.library-group {border-left:3px solid #4863df;padding:14px;background:#f8f9ff}
+.library-group-kind {display:block;font-size:11px;color:#5268bd;font-weight:600;margin-bottom:5px}
+.library-group strong {font-size:15px;line-height:1.55}
+#library-scope {font-weight:600;line-height:1.6;overflow-wrap:anywhere}
+.library-answer-preview {display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:#657087;font-size:12px;line-height:1.6;margin-top:6px}
+.web-question-group {border:1px solid #dce2f4;border-radius:12px;margin:16px 0;overflow:hidden}
+.web-question-heading {padding:14px 16px;background:#f3f5ff;border-bottom:1px solid #dce2f4}
+.web-question-heading h3 {font-size:16px;line-height:1.6;margin:0 0 4px;overflow-wrap:anywhere}
+.web-question-group .web-result {margin:0;border:0;border-radius:0;border-bottom:1px solid #e8ecf5}
+.web-question-group .web-result:last-child {border-bottom:0}

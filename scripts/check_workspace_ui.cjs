@@ -181,6 +181,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.equal(get('run-reading').disabled, true);
   assert.equal(get('export-apkg').disabled, true);
   assert.match(allText(get('source-list')), /资料库还是空/);
+  assert.equal(vm.runInContext('library.view', sandbox), 'question', 'Library opens with questions');
   assert.equal(get('library-drawer').open, true, 'Desktop library starts expanded without matchMedia');
   assert.equal(get('workspace-empty').hidden, false);
   fixtures.set('/api/v1/zhihu/status', {configured: false});
@@ -229,6 +230,10 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert.equal(get('source-list').children.length, 1);
   await get('source-list').children[0].click(); await idle();
   assert.equal(vm.runInContext('state.sources.length', sandbox), 2, 'Question group includes multiple authors');
+  assert.match(get('library-scope').textContent, /管理测试问题 · 2 篇回答/);
+  assert.match(get('library-back').textContent, /返回全部问题/);
+  assert.match(allText(get('source-list').children[0]), /管理同名作者的回答/);
+  assert.doesNotMatch(allText(get('source-list').children[0]), /管理测试问题/);
   await get('source-list').children[0].children[1].click(); await idle();
   get('library-select-page').checked = true; get('library-select-page').events.change();
   let confirmed = false;
@@ -264,6 +269,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   await submit('import-form');
   assert.match(get('import-status').className, /success/, get('import-status').textContent);
   assert.equal(get('selected-text').textContent, original);
+  assert.equal(vm.runInContext('library.view', sandbox), 'question', 'Import preserves question view');
   assert.equal(get('run-reading').disabled, false);
   const primaryId = vm.runInContext('state.selected.id', sandbox);
   assert.deepEqual([...stored.values()], [primaryId], 'Only the selected source ID may be stored');
@@ -501,6 +507,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
     assert.equal(get('export-tsv').disabled, true);
   }
   failures.clear();
+  get('library-view').value = 'all'; await get('library-view').events.change(); await idle();
   const batches = Array.from({length: 20}, (_, i) => ({title: 'Page ' + i, author_id: 'pagination', author_name: 'Paging', text: 'Page body ' + i}));
   get('import-file').files = [{size: 1000, text: async () => JSON.stringify({items: batches})}];
   await click('import-json');
@@ -732,12 +739,20 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   await submit('web-preview-form');
   assert.equal(requests.filter(row => row.url === '/api/v1/sources/import').length, importsBeforePreview, 'Preview must not save answers');
   assert.deepEqual(JSON.parse(requests.filter(row => row.url === webPreviewPath).at(-1).options.body), {url: get('web-url').value, mode: 'question', min_votes: 100, max_items: 45});
-  assert.equal(get('web-results').children.length, 45);
+  assert.equal(get('web-results').children.length, 1, 'Answers share one question heading');
+  assert.equal(get('web-results').children[0].children.length, 46);
+  assert.match(allText(get('web-results').children[0].children[0]), /45 篇回答/);
   assert.match(get('web-status').textContent, /检查 50 条，略过 5 条/);
   assert.match(get('web-status').textContent, /还有未读取/);
   assert.match(allText(get('web-results')), /完整回答 <script>not code<\/script> 0/);
   assert.match(allText(get('web-results')), /网页作者 · 1000 赞同/);
-  assert.equal(get('web-results').children[0].children[3].children[1].textContent, webItems[0].draft.text);
+  assert.equal(get('web-results').children[0].children[1].children[3].children[1].textContent, webItems[0].draft.text);
+  sandbox.groupPreview = [webItems[0], {...webItems[0], draft: {...webItems[0].draft, url: 'https://www.zhihu.com/question/8001/answer/9001'}}, {...webItems[0], draft: {...webItems[0].draft, url: 'https://example.com/question/8000/answer/9000'}}];
+  vm.runInContext('renderWebResults(groupPreview)', sandbox);
+  assert.equal(get('web-results').children.length, 3, 'Equal titles cannot merge different question IDs or untrusted URLs');
+  assert.equal(get('web-results').children[2].className, 'zhihu-result web-result', 'Unassociated records remain individual');
+  sandbox.originalWebItems = webItems;
+  vm.runInContext('renderWebResults(originalWebItems)', sandbox);
   assert.match(get('web-selection-count').textContent, /已选 45 篇/);
   const firstWebCheckbox = vm.runInContext('webImport.results[0].checkbox', sandbox);
   firstWebCheckbox.checked = false; firstWebCheckbox.events.change();
@@ -880,7 +895,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   const companionAction = index => get('companion-inbox').children[0].children[3].children[index];
   await companionAction(0).click(); await idle();
   assert.equal(requests.filter(row => row.url === '/api/v1/sources/import').length, beforeReceiving, 'Receiving and previewing require a separate import action');
-  assert.equal(get('web-results').children.length, 2);
+  assert.equal(get('web-results').children.length, 1);
   assert.match(allText(get('web-results')), /页面已加载内容 · 完整性未核验/);
   assert.doesNotMatch(allText(get('web-results')), /查看完整原文/);
   assert.match(get('web-status').textContent, /尚未保存/);
@@ -890,9 +905,9 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   get('web-url').value = 'https://www.zhihu.com/question/unrelated';
   get('web-url').events.input();
   get('web-min-votes').value = '500';
-  assert.equal(get('web-results').children.length, 2);
+  assert.equal(get('web-results').children.length, 1);
   await click('refresh-companion');
-  assert.equal(get('web-results').children.length, 2, 'Refreshing the inbox preserves the reviewed batch and choices');
+  assert.equal(get('web-results').children.length, 1, 'Refreshing the inbox preserves the reviewed batch and choices');
   await click('web-import-selected');
   assert.match(get('web-status').textContent, /已确认导入 2 篇/);
   assert.equal(get('web-import-selected').disabled, true);
@@ -921,7 +936,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   failures.set(companionInboxPath, 'Fixture inbox unavailable');
   await click('refresh-companion');
   assert.match(get('companion-status').textContent, /inbox unavailable/);
-  assert.equal(get('web-results').children.length, 2, 'Inbox refresh errors must preserve an already reviewed batch');
+  assert.equal(get('web-results').children.length, 1, 'Inbox refresh errors must preserve an already reviewed batch');
   failures.delete(companionInboxPath);
   fixtures.set(companionBatchPath + '/dismiss', {removed: true});
   fixtures.set(companionInboxPath, {items: []});
