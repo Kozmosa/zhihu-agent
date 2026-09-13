@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>知境 · 随身助手</title>
+  <link rel="stylesheet" href="/assets/companion.css">
+  <link rel="stylesheet" href="/assets/question-import.css">
+  <link rel="stylesheet" href="/assets/knowledge-map.css">
+</head>
+<body data-desktop="__DESKTOP__" data-surface="companion">
+<div id="companion-root">
+  <header class="companion-header">
+    <div class="companion-brand"><img src="/assets/liukanshan-header.png" alt="刘看山"><div><strong>知境</strong><span>随身阅读助手</span></div></div>
+    <a id="companion-workspace-link" class="workspace-link" href="/workspace" target="_blank" rel="noopener noreferrer" title="在浏览器中打开完整工作台">完整工作台 <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <section class="source-context" aria-label="当前资料">
+    <div class="source-row"><label for="companion-source">当前资料</label><select id="companion-source"><option value="">正在读取资料…</option></select><button id="companion-refresh" class="icon-button" type="button" title="刷新资料" aria-label="刷新资料"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 6.2A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.8 5.8"/></svg></button></div>
+    <div id="companion-source-note" class="source-note">选择一份资料，随手读懂一点。</div>
+    <div class="source-shortcuts">
+      <details id="companion-import">
+        <summary>＋ 粘贴资料</summary>
+        <form id="companion-import-form" class="import-form">
+          <div class="import-fields"><label>标题（可选）<input id="companion-import-title" maxlength="200" placeholder="留空则从正文取标题"></label><label>作者（可选）<input id="companion-import-name" maxlength="200" placeholder="未署名"></label></div>
+          <label for="companion-import-text">正文</label><textarea id="companion-import-text" required maxlength="100000" rows="4" placeholder="粘贴你想阅读的内容…"></textarea>
+          <div class="import-actions"><span>保存在本机资料库</span><button id="companion-import-submit" type="submit" class="primary">保存并选用</button></div>
+          <p id="companion-import-status" class="status" role="status" aria-live="polite"></p>
+        </form>
+      </details>
+      <button id="companion-question-import" type="button" class="qi-entry" data-open-question-import>导入知乎问题</button>
+      <details class="source-pages"><summary>更多资料</summary><div class="pager"><button id="companion-source-prev" type="button" aria-label="上一页资料">上一页</button><span id="companion-source-page">第 1 页</span><button id="companion-source-next" type="button" aria-label="下一页资料">下一页</button></div></details>
+    </div>
+    <p id="companion-status" class="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <nav class="tool-switcher" role="tablist" aria-label="五项功能">
+    <button id="tool-tab-reading" class="tool-tab" data-tool="reading" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-reading" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v5h4M9 12h6M9 16h5"/></svg><span>长文拆解</span></button>
+    <button id="tool-tab-author" class="tool-tab" data-tool="author" type="button" role="tab" aria-selected="true" aria-controls="tool-pane-author"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 1-8 8H5l-3 3V11a9 9 0 0 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg><span>答主问答</span></button>
+    <button id="tool-tab-cards" class="tool-tab" data-tool="cards" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-cards" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="14" rx="3"/><path d="M7 3h10M8 12h8M8 16h5"/></svg><span>记忆卡片</span></button>
+    <button id="tool-tab-facts" class="tool-tab" data-tool="facts" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-facts" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg><span>事实审查</span></button>
+    <button id="tool-tab-knowledge" class="tool-tab" data-tool="knowledge" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-knowledge" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="m10.5 7.5-4 8M13.5 7.5l4 8M8 18h8"/></svg><span>知识地图</span></button>
+  </nav>
+
+  <main class="tool-area">
+    <section id="tool-pane-author" class="tool-pane" role="tabpanel" aria-labelledby="tool-tab-author">
+      <div class="tool-heading"><h1>随手问一句</h1><p>根据作者资料回答，不代表作者本人。</p></div>
+      <div id="tool-result-author" class="tool-result" role="region" aria-label="问答结果"></div>
+      <form id="tool-form-author" class="composer"><label class="sr-only" for="tool-question">你的问题</label><textarea id="tool-question" required maxlength="2000" rows="3" placeholder="这篇内容的核心观点是什么？"></textarea><div class="composer-actions"><span>回答附带原文依据</span><button id="tool-run-author" type="submit" class="primary" disabled>提问 <span aria-hidden="true">↑</span></button></div><p id="tool-status-author" class="status" role="status" aria-live="polite"></p></form>
+    </section>
+    <section id="tool-pane-reading" class="tool-pane" role="tabpanel" aria-labelledby="tool-tab-reading" hidden>
+      <div class="tool-heading"><h1>抓住文章重点</h1><p>一份摘要，几个要点，读懂当前资料。</p></div>
+      <div id="tool-result-reading" class="tool-result" role="region" aria-label="拆解结果"></div>
+      <form id="tool-form-reading" class="composer action-only"><div class="composer-actions"><span>可展开要点与原文依据</span><button id="tool-run-reading" type="submit" class="primary" disabled>拆解这篇</button></div><p id="tool-status-reading" class="status" role="status" aria-live="polite"></p></form>
+    </section>
+    <section id="tool-pane-cards" class="tool-pane" role="tabpanel" aria-labelledby="tool-tab-cards" hidden>
+      <div class="tool-heading"><h1>记住三个知识点</h1><p>生成最多 3 张卡片，试着先回想再看答案。</p></div>
+      <div id="tool-result-cards" class="tool-result" role="region" aria-label="记忆卡片"></div>
+      <form id="tool-form-cards" class="composer action-only"><div class="composer-actions"><span>核对后可导出复习</span><button id="tool-run-cards" type="submit" class="primary" disabled>生成卡片</button></div><p id="tool-status-cards" class="status" role="status" aria-live="polite"></p></form>
+    </section>
+    <section id="tool-pane-facts" class="tool-pane" role="tabpanel" aria-labelledby="tool-tab-facts" hidden>
+      <div class="tool-heading"><h1>这句话有依据吗？</h1><p>对照其他已导入资料，排除当前文章。</p></div>
+      <div id="tool-result-facts" class="tool-result" role="region" aria-label="事实审查结果"></div>
+      <form id="tool-form-facts" class="composer"><label class="sr-only" for="tool-claims">待审查的主张，每行一条，最多五条</label><textarea id="tool-claims" required maxlength="10000" rows="3" placeholder="输入想核对的主张，每行一条…"></textarea><div class="composer-actions"><span>最多 5 条 · 仅对照本机资料</span><button id="tool-run-facts" type="submit" class="primary" disabled>核对主张</button></div><p id="tool-status-facts" class="status" role="status" aria-live="polite"></p></form>
+    </section>
+    <section id="tool-pane-knowledge" class="tool-pane" role="tabpanel" aria-labelledby="tool-tab-knowledge" hidden>
+      <div class="tool-heading"><h1>发现知识之间的联系</h1><p>选择资料范围，探索联系并对照原文。</p></div>
+      <div id="tool-result-knowledge" class="tool-result" role="region" aria-label="知识关系"></div>
+      <form id="tool-form-knowledge" class="composer action-only"><div class="knowledge-controls"><label>资料范围<select id="tool-knowledge-scope"><option value="author">当前作者</option><option value="all">全部资料</option></select></label><label>最多篇数<select id="tool-knowledge-limit"><option value="10">10 篇</option><option value="20" selected>20 篇</option><option value="50">50 篇</option><option value="100">100 篇</option></select></label></div><div class="composer-actions"><span>点开关系查看依据</span><button id="tool-run-knowledge" type="submit" class="primary" disabled>发现联系</button></div><p id="tool-status-knowledge" class="status" role="status" aria-live="polite"></p></form>
+    </section>
+  </main>
+  <footer class="companion-footer"><span class="presence-dot" aria-hidden="true"></span>你的阅读，随时继续<span class="footer-separator">·</span>关闭窗口即可收起</footer>
+</div>
+<script src="/assets/knowledge-map.js" nonce="__CONFIG_TOKEN__"></script>
+<script src="/assets/companion.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
+<script src="/assets/question-import.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
+</body>
+</html>

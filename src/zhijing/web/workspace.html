@@ -5,29 +5,48 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>知境 · 知识工作台</title>
   <link rel="stylesheet" href="/assets/workspace.css">
+  <link rel="stylesheet" href="/assets/question-import.css">
+  <link rel="stylesheet" href="/assets/knowledge-map.css">
 </head>
-<body>
+<body data-desktop="__DESKTOP__">
 <a class="skip" href="#main">跳到工作区</a>
-<header><a class="brand" href="/workspace"><span class="mark">知</span>知境 <small>知识工作台</small></a><nav aria-label="全局导航"><span id="service-mode" class="badge">正在连接…</span><a href="/">模型配置</a><a href="/docs" target="_blank" rel="noopener">API 文档 ↗</a></nav></header>
+<header class="app-header">
+  <a class="brand" href="/workspace" aria-label="知境工作台"><span class="mark"><img src="/assets/liukanshan-header.png" alt="刘看山"></span><span class="brand-name">知境<small>随身知识伙伴</small></span></a>
+  <div class="header-content"><p class="breadcrumb">你的知识，随时在身边</p><nav aria-label="工作台状态"><span id="service-mode" class="badge mode-badge" role="status">正在连接…</span><span class="local-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>资料保存在本机</span></nav></div>
+</header>
 <div class="shell">
 <aside class="library" aria-label="资料库">
-  <div class="library-title"><h2>我的资料</h2><button id="reload-sources" type="button" class="quiet">刷新</button></div>
-  <p class="muted">先导入，再选择一篇开始探索。</p>
-  <button id="open-import" type="button" class="primary wide">＋ 导入资料</button>
-  <form id="source-filter-form"><label for="source-filter">按作者 ID 筛选</label><div class="inline"><input id="source-filter" placeholder="留空查看全部" maxlength="200"><button type="submit">筛选</button></div></form>
+  <div class="library-section-label">我的知识库</div><div class="library-actions"><button id="open-zhihu" type="button" class="primary"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>搜索知乎</button><button id="open-import" type="button"><span class="plus" aria-hidden="true">＋</span>导入资料</button></div>
+  <button id="workspace-question-import" type="button" class="qi-entry" data-open-question-import>导入知乎问题 · 读取多篇回答</button>
+  <details id="library-drawer" class="library-drawer" open><summary>我的资料<span class="drawer-hint">查看资料库</span></summary><div class="library-content">
+  <div class="library-title"><p class="muted small">收藏你的阅读与思考</p><button id="reload-sources" type="button" class="quiet">刷新</button></div>
+  <details class="library-filter"><summary>按作者标识筛选</summary><form id="source-filter-form"><label for="source-filter">作者标识</label><div class="inline"><input id="source-filter" placeholder="留空查看全部" maxlength="200"><button type="submit">筛选</button></div></form></details>
   <div id="library-status" class="status" role="status" aria-live="polite"></div>
   <div id="source-list" class="source-list"></div>
   <div class="pager"><button id="prev-page" type="button">上一页</button><span id="page-number">第 1 页</span><button id="next-page" type="button">下一页</button></div>
+  </div></details>
+  <p class="library-footnote"><span aria-hidden="true">✦</span> 每一次理解，都有出处</p>
 </aside>
 <main id="main">
-  <div class="intro"><div class="eyebrow">READ · QUESTION · CONNECT</div><h1>把阅读，变成自己的知识。</h1><p>五种能力，共用一份可追溯的资料。</p></div>
+  <div class="intro"><div><div class="eyebrow">阅读 · 理解 · 沉淀</div><h1>把读过的，变成自己的。</h1><p>选一份资料，用你需要的方式展开。</p></div><div class="intro-companion" aria-hidden="true"><span class="companion-orbit"></span><img src="/assets/liukanshan.png" alt=""><span class="companion-note">一起，把知识理清楚。</span></div></div>
+  <div class="workspace-grid">
+  <section id="zhihu-panel" class="panel" hidden aria-labelledby="zhihu-heading">
+    <div class="panel-title"><div><div class="eyebrow">DISCOVER</div><h2 id="zhihu-heading">探索知乎</h2></div><button id="close-zhihu" type="button" class="quiet">收起</button></div>
+    <p class="muted panel-description">发现值得读的内容，选取摘要保存到你的资料库。</p>
+    <p id="zhihu-config-state" class="scope-note" role="status">正在连接搜索服务…</p>
+    <form id="zhihu-search-form" class="search-form">
+      <div class="zhihu-search-fields"><div><label for="zhihu-query">搜索关键词</label><input id="zhihu-query" required maxlength="200" placeholder="例如：主动回忆 学习方法"></div><div><label for="zhihu-count">结果数量</label><input id="zhihu-count" type="number" min="1" max="10" value="3" required></div></div>
+      <div class="actions search-submit"><button id="run-zhihu-search" class="primary" type="submit" disabled>搜索</button></div>
+    </form>
+    <div id="zhihu-status" class="status" role="status" aria-live="polite"></div><div id="zhihu-results" class="results zhihu-results"></div>
+  </section>
   <section id="import-panel" class="panel" hidden aria-labelledby="import-heading">
     <div class="panel-title"><h2 id="import-heading">导入阅读资料</h2><button id="close-import" type="button" class="quiet">收起</button></div>
     <p class="muted">粘贴正文保存到本地资料库。填写来源链接不会自动抓取网页。</p>
     <form id="import-form">
       <label for="import-title">标题</label><input id="import-title" required maxlength="200" placeholder="这篇资料的标题">
-      <div class="two"><div><label for="import-author-name">作者名称</label><input id="import-author-name" required maxlength="200" placeholder="显示名称"></div><div><label for="import-author-id">作者 ID</label><input id="import-author-id" required maxlength="200" placeholder="例如 author-001"></div></div>
-      <p class="muted small">同一作者请使用相同 ID，问答会参考该作者的已导入资料。</p>
+      <label for="import-author-name">作者名称</label><input id="import-author-name" required maxlength="200" placeholder="这篇资料由谁创作">
+      <details class="advanced-author"><summary>关联同一作者的资料（可选）</summary><label for="import-author-id">作者标识</label><input id="import-author-id" maxlength="200" placeholder="确认是同一作者时，填写相同标识"><p class="muted small">留空时单独保存作者身份，避免将同名作者混为一人。</p></details>
       <label for="import-text">资料正文</label><textarea id="import-text" required maxlength="100000" rows="8" placeholder="粘贴原文（最多 100,000 字符）"></textarea>
       <div class="two"><div><label for="import-url">来源链接（可选）</label><input id="import-url" type="url" placeholder="https://…"></div><div><label for="import-topics">主题标签（可选）</label><input id="import-topics" placeholder="用逗号分隔，如：学习,记忆"></div></div>
       <div class="actions"><button class="primary" type="submit">保存并选中</button></div>
@@ -35,22 +54,31 @@
     <details class="batch"><summary>从 JSON 批量导入</summary><p class="muted small">支持项目 examples/sources.json 格式，一次最多 20 条。重复导入相同内容不会新增重复记录。</p><label for="import-file">选择 JSON 文件</label><input id="import-file" type="file" accept=".json,application/json"><button id="import-json" type="button">导入文件</button></details>
     <div id="import-status" class="status" role="status" aria-live="polite"></div>
   </section>
-  <section class="selection panel" aria-labelledby="selected-title"><div class="eyebrow">当前资料</div><h2 id="selected-title">还没有选择资料</h2><p id="selected-meta">在左侧选择，或导入你的第一篇文章。</p><details id="source-preview" hidden><summary>查看完整原文</summary><div id="selected-text" class="original"></div><a id="selected-url" target="_blank" rel="noopener noreferrer" hidden>查看来源网页 ↗</a></details></section>
+  <div id="reading-workspace" class="reading-workspace">
   <div class="tabs" role="tablist" aria-label="知识能力">
-    <button id="tab-reading" role="tab" aria-selected="true" aria-controls="pane-reading" tabindex="0" data-tab="reading">01 长文拆解</button>
-    <button id="tab-author" role="tab" aria-selected="false" aria-controls="pane-author" tabindex="-1" data-tab="author">02 答主问答</button>
-    <button id="tab-cards" role="tab" aria-selected="false" aria-controls="pane-cards" tabindex="-1" data-tab="cards">03 记忆卡片</button>
-    <button id="tab-facts" role="tab" aria-selected="false" aria-controls="pane-facts" tabindex="-1" data-tab="facts">04 事实审查</button>
-    <button id="tab-knowledge" role="tab" aria-selected="false" aria-controls="pane-knowledge" tabindex="-1" data-tab="knowledge">05 知识地图</button>
+    <button id="tab-reading" role="tab" aria-selected="true" aria-controls="pane-reading" tabindex="0" data-tab="reading"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h11l5 5v11H4Z"/><path d="M14 4v6h6M8 13h8M8 17h5"/></svg></span><span class="tab-copy">长文拆解<small>理清文章脉络</small></span></button>
+    <button id="tab-author" role="tab" aria-selected="false" aria-controls="pane-author" tabindex="-1" data-tab="author"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 1-8 8H6l-4 3V11a9 9 0 0 1 18 0Z"/><path d="M7 11h.01M11 11h.01M15 11h.01"/></svg></span><span class="tab-copy">答主问答<small>带着问题深入</small></span></button>
+    <button id="tab-cards" role="tab" aria-selected="false" aria-controls="pane-cards" tabindex="-1" data-tab="cards"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="14" rx="3"/><path d="M7 3h10M8 12h8M8 16h5"/></svg></span><span class="tab-copy">记忆卡片<small>把理解记下来</small></span></button>
+    <button id="tab-facts" role="tab" aria-selected="false" aria-controls="pane-facts" tabindex="-1" data-tab="facts"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg></span><span class="tab-copy">事实审查<small>让结论有依据</small></span></button>
+    <button id="tab-knowledge" role="tab" aria-selected="false" aria-controls="pane-knowledge" tabindex="-1" data-tab="knowledge"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="m10.5 8-4 7M13.5 8l4 7M8 18h8"/></svg></span><span class="tab-copy">知识地图<small>看见知识联系</small></span></button>
   </div>
-  <p class="model-notice" id="model-notice">正在读取当前模式。启用模型后，相关资料与问题会发送到所配置的模型服务。</p>
+  <section class="selection" aria-labelledby="selected-title"><div class="eyebrow"><span class="selection-dot"></span>正在阅读</div><h2 id="selected-title">选择一份资料开始</h2><p id="selected-meta">从我的资料中选择，或添加一份新资料。</p><p id="selected-extent" hidden></p><details id="source-preview" hidden><summary id="source-preview-label">查看已导入内容</summary><div id="selected-text" class="original"></div><a id="selected-url" target="_blank" rel="noopener noreferrer" hidden>查看来源网页 ↗</a></details></section>
+
+  <p class="evidence-notice" id="model-notice">内容依据已导入资料整理，重要结论可回到原文核对。</p>
   <section id="pane-reading" role="tabpanel" aria-labelledby="tab-reading" class="panel">
+    <div id="workspace-empty" class="workspace-empty">
+      <div class="empty-illustration" aria-hidden="true"><svg viewBox="0 0 80 80"><path class="book-back" d="M14 22 37 15l27 7v42l-27-7-23 7Z"/><path d="M37 15v42M21 30l9-3M21 38l9-3M45 29l11 3M45 37l11 3"/><circle cx="63" cy="15" r="12"/><path class="illustration-accent" d="M63 9v12M57 15h12"/></svg></div>
+      <h2>从一篇好内容开始</h2><p>导入一份资料，或去知乎发现新观点。<br>拆解、提问、记忆、求证，让知识连成一张地图。</p>
+      <div class="actions"><button id="empty-search" type="button" class="primary">搜索知乎 <span aria-hidden="true">↗</span></button><button id="empty-import" type="button">添加阅读资料</button></div>
+      <p class="empty-footnote">不用从空白开始，让每一份资料都有新的收获。</p>
+    </div>
     <h2>读懂文章的脉络</h2><p class="muted">梳理摘要、段落要点与导读问题，随时对照原文。</p>
     <form id="reading-form"><div class="actions"><button id="run-reading" class="primary requires-source" type="submit" disabled>拆解当前资料</button></div></form>
     <div id="reading-status" class="status" role="status" aria-live="polite"></div><div id="reading-result" class="results"></div>
   </section>
   <section id="pane-author" role="tabpanel" aria-labelledby="tab-author" class="panel" hidden>
-    <h2>带着问题，回到作者的资料</h2><p class="muted">以当前文章为主要资料，参考同一作者的已导入内容。助手不代表作者本人。</p>
+    <h2>带着问题，回到作者的资料</h2><p id="author-scope-notice" class="muted">以当前文章为主要资料，参考同一作者的已导入内容。助手不代表作者本人。</p>
+    <div class="question-prompts" aria-label="试着这样提问"><button type="button" data-question="这篇资料最核心的观点是什么？">核心观点是什么？</button><button type="button" data-question="这些方法适用于什么情况，有哪些限制？">有哪些适用条件？</button><button type="button" data-question="如何把这些观点应用到实际行动中？">如何用到实践中？</button></div>
     <form id="author-form"><label for="author-question">你想问什么？</label><textarea id="author-question" required maxlength="2000" rows="3" placeholder="作者提出了哪些方法？分别适用于什么情况？"></textarea><div class="actions"><button id="run-author" class="primary requires-source" type="submit" disabled>根据资料回答</button></div></form>
     <div id="author-status" class="status" role="status" aria-live="polite"></div><div id="author-result" class="results"></div>
   </section>
@@ -65,11 +93,16 @@
     <div id="facts-status" class="status" role="status" aria-live="polite"></div><div id="facts-result" class="results"></div>
   </section>
   <section id="pane-knowledge" role="tabpanel" aria-labelledby="tab-knowledge" class="panel" hidden>
-    <h2>看见知识之间的联系</h2><p class="muted">离线模式按主题组织文章；模型模式从资料提取概念与有引用的关系。</p>
+    <h2>看见知识之间的联系</h2><p class="muted">从资料出发，探索主题、文章与概念之间的联系。</p>
     <form id="knowledge-form"><div class="two"><div><label for="graph-scope">资料范围</label><select id="graph-scope"><option value="all">全部已导入资料</option><option value="author">当前作者的资料</option></select></div><div><label for="graph-limit">最多使用多少篇资料</label><input id="graph-limit" type="number" min="1" max="500" value="20" required></div></div><div class="actions"><button id="run-knowledge" class="primary" type="submit">生成知识地图</button></div></form>
     <div id="knowledge-status" class="status" role="status" aria-live="polite"></div><div id="knowledge-result" class="results"></div>
   </section>
-  <footer>知境 · 让每一次理解，都有出处</footer>
+  </div></div>
+  <footer><span>知境 <span class="footer-dot">·</span> 陪你把知识变成自己的</span><span>有依据，也有新的思考</span></footer>
 </main></div>
+<script src="/assets/knowledge-map.js" nonce="__CONFIG_TOKEN__"></script>
 <script src="/assets/workspace.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
+<script src="/assets/workspace-shell.js" nonce="__CONFIG_TOKEN__"></script>
+<script src="/assets/question-import.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
+__CHAT_WIDGET__
 </body></html>

@@ -1,0 +1,23 @@
+<link rel="stylesheet" href="/assets/chat-widget.css">
+<div id="chat-root">
+  <button id="chat-launcher" class="chat-launcher" type="button" aria-label="打开知境问答" aria-expanded="false" aria-controls="chat-window"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-8 8H5l-3 2v-9.5a9 9 0 1 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg><span class="chat-launcher-label">问知境</span></button>
+  <section id="chat-window" class="chat-window" hidden role="dialog" aria-labelledby="chat-title">
+    <div class="chat-header"><div class="chat-brand"><span class="chat-mark" aria-hidden="true">知</span><div><h2 id="chat-title">知境问答</h2><p>随时提问，让理解更进一步</p></div></div><button id="chat-close" type="button" class="quiet" aria-label="收起问答浮窗">×</button></div>
+    <details id="chat-source-picker" class="chat-source-picker" open>
+      <summary><span id="chat-context">选择一份资料，开始对话</span><span class="chat-switch-hint">切换 ⌄</span></summary>
+      <div class="chat-source-options">
+        <label for="chat-source-select" class="sr-only">选择问答参考资料</label>
+        <div class="chat-source-row"><select id="chat-source-select"><option value="">选择已导入的资料…</option></select><button id="chat-source-refresh" type="button" aria-label="刷新问答资料列表">↻</button></div>
+        <div class="chat-source-pages"><button id="chat-source-prev" type="button">上一页</button><span id="chat-source-page">第 1 页</span><button id="chat-source-next" type="button">下一页</button></div>
+        <div id="chat-source-status" class="status" role="status" aria-live="polite"></div>
+      </div>
+    </details>
+    <p id="chat-mode-notice" class="chat-mode-notice">正在连接问答服务…</p>
+    <div id="chat-messages" class="chat-messages" role="log" aria-label="问答记录" aria-live="polite">
+      <div id="chat-empty" class="chat-empty"><div class="chat-empty-icon" aria-hidden="true">?</div><h3>把好奇，变成理解。</h3><p>围绕已导入资料提问，<br>回答会附上可核对的引用。</p><button id="chat-pick-source" type="button">选择一份资料</button></div>
+    </div>
+    <div id="chat-status" class="status" role="status" aria-live="polite"></div>
+    <form id="chat-form" class="chat-form"><label for="chat-question" class="sr-only">向知境提问</label><div class="chat-compose"><textarea id="chat-question" maxlength="2000" rows="2" placeholder="这篇资料的核心观点是什么？" required></textarea><button id="chat-send" type="submit" class="primary" aria-label="发送问题"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div><p class="chat-footnote">基于已导入内容回答 · 重要结论请核对来源</p></form>
+  </section>
+</div>
+<script src="/assets/chat-widget.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>

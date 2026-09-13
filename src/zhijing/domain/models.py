@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, HttpUrl, StringConstraints
@@ -19,6 +20,16 @@ class Schema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class SourceProvenance(Schema):
+    provider: Literal["zhihu"] = "zhihu"
+    external_id: ShortText
+    content_type: ShortText
+    canonical_url: HttpUrl
+    fetched_at: datetime
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    external_author_id: ShortText | None = None
+
+
 class SourceDraft(Schema):
     title: ShortText
     author_id: ShortText
@@ -27,6 +38,8 @@ class SourceDraft(Schema):
     url: HttpUrl | None = None
     topics: list[ShortText] = Field(default_factory=list, max_length=20)
     origin: Literal["manual", "zhihu", "demo"] = "manual"
+    content_extent: Literal["fulltext", "excerpt", "unknown"] = "unknown"
+    provenance: SourceProvenance | None = None
 
 
 class Source(SourceDraft):
