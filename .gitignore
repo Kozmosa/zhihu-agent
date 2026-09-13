@@ -26,3 +26,6 @@ htmlcov/
 # Local review snapshots, logs and isolated test data stay on this machine.
 src/.backend-work/
 src/_review/
+
+# Machine-local model credentials
+model-config.json

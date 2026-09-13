@@ -1,5 +1,6 @@
 """配置只在创建应用时读取，导入模块不会创建数据库或连接网络。"""
 
+import json
 import math
 import os
 from dataclasses import dataclass, field
@@ -20,8 +21,8 @@ class Settings:
     ollama_max_input_chars: int = 120000
     ollama_num_predict: int = 4096
     ollama_num_ctx: int = 32768
-    openai_url: str = "https://api.deepseek.com/v1"
-    openai_model: str = ""
+    openai_url: str = "https://api.openai-next.com/v1"
+    openai_model: str = "deepseek-v4-flash"
     openai_api_key: str = field(default="", repr=False)
     openai_timeout: float = 120
     openai_format: str = "json"
@@ -110,28 +111,46 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        data_dir = Path(os.getenv("ZHIJING_DATA_DIR", "E:/CzCode/codex/state/zhijing"))
+        local = _local_model_config(data_dir / "model-config.json")
+        # An explicit process model configuration replaces the entire saved profile.
+        # This avoids sending a saved credential to an overridden endpoint.
+        override = any(
+            k == "ZHIJING_MODEL_PROVIDER" or k.startswith(("ZHIJING_OPENAI_", "ZHIJING_OLLAMA_"))
+            for k in os.environ
+        )
+
+        def get(name, default):
+            return os.environ.get(name, default if override else local.get(name, default))
+
+        def number(name, default, converter):
+            try:
+                return converter(get(name, default))
+            except ValueError:
+                raise ValueError(f"{name} must be a valid number.") from None
+
         return cls(
-            data_dir=Path(os.getenv("ZHIJING_DATA_DIR", "E:/CzCode/codex/state/zhijing")),
-            zhihu_access_secret=os.getenv("ZHIHU_ACCESS_SECRET", "").strip(),
-            zhihu_timeout=_number("ZHIHU_SEARCH_TIMEOUT", "20", float),
-            model_provider=os.getenv("ZHIJING_MODEL_PROVIDER", "extractive"),
-            ollama_url=os.getenv("ZHIJING_OLLAMA_URL", "http://127.0.0.1:11434"),
-            ollama_model=os.getenv("ZHIJING_OLLAMA_MODEL", "qwen3:8b"),
-            ollama_api_key=os.getenv("ZHIJING_OLLAMA_API_KEY", ""),
-            ollama_timeout=_number("ZHIJING_OLLAMA_TIMEOUT", "120", float),
-            ollama_format=os.getenv("ZHIJING_OLLAMA_FORMAT", "schema"),
-            ollama_max_input_chars=_number("ZHIJING_OLLAMA_MAX_INPUT_CHARS", "120000", int),
-            ollama_num_predict=_number("ZHIJING_OLLAMA_NUM_PREDICT", "4096", int),
-            ollama_num_ctx=_number("ZHIJING_OLLAMA_NUM_CTX", "32768", int),
-            openai_url=os.getenv("ZHIJING_OPENAI_URL", "https://api.deepseek.com/v1"),
-            openai_model=os.getenv("ZHIJING_OPENAI_MODEL", ""),
-            openai_api_key=os.getenv("ZHIJING_OPENAI_API_KEY", ""),
-            openai_timeout=_number("ZHIJING_OPENAI_TIMEOUT", "120", float),
-            openai_format=os.getenv("ZHIJING_OPENAI_FORMAT", "json"),
-            openai_max_input_chars=_number("ZHIJING_OPENAI_MAX_INPUT_CHARS", "120000", int),
-            openai_max_tokens=_number("ZHIJING_OPENAI_MAX_TOKENS", "4096", int),
-            openai_context_window=_number("ZHIJING_OPENAI_CONTEXT_WINDOW", "32768", int),
-            openai_thinking=os.getenv("ZHIJING_OPENAI_THINKING", "auto"),
+            data_dir=Path(get("ZHIJING_DATA_DIR", "E:/CzCode/codex/state/zhijing")),
+            zhihu_access_secret=get("ZHIHU_ACCESS_SECRET", "").strip(),
+            zhihu_timeout=number("ZHIHU_SEARCH_TIMEOUT", "20", float),
+            model_provider=get("ZHIJING_MODEL_PROVIDER", "extractive"),
+            ollama_url=get("ZHIJING_OLLAMA_URL", "http://127.0.0.1:11434"),
+            ollama_model=get("ZHIJING_OLLAMA_MODEL", "qwen3:8b"),
+            ollama_api_key=get("ZHIJING_OLLAMA_API_KEY", ""),
+            ollama_timeout=number("ZHIJING_OLLAMA_TIMEOUT", "120", float),
+            ollama_format=get("ZHIJING_OLLAMA_FORMAT", "schema"),
+            ollama_max_input_chars=number("ZHIJING_OLLAMA_MAX_INPUT_CHARS", "120000", int),
+            ollama_num_predict=number("ZHIJING_OLLAMA_NUM_PREDICT", "4096", int),
+            ollama_num_ctx=number("ZHIJING_OLLAMA_NUM_CTX", "32768", int),
+            openai_url=get("ZHIJING_OPENAI_URL", "https://api.openai-next.com/v1"),
+            openai_model=get("ZHIJING_OPENAI_MODEL", "deepseek-v4-flash"),
+            openai_api_key=get("ZHIJING_OPENAI_API_KEY", ""),
+            openai_timeout=number("ZHIJING_OPENAI_TIMEOUT", "120", float),
+            openai_format=get("ZHIJING_OPENAI_FORMAT", "json"),
+            openai_max_input_chars=number("ZHIJING_OPENAI_MAX_INPUT_CHARS", "120000", int),
+            openai_max_tokens=number("ZHIJING_OPENAI_MAX_TOKENS", "4096", int),
+            openai_context_window=number("ZHIJING_OPENAI_CONTEXT_WINDOW", "32768", int),
+            openai_thinking=get("ZHIJING_OPENAI_THINKING", "auto"),
         )
 
 
@@ -140,3 +159,33 @@ def _number(name: str, default: str, converter):
         return converter(os.getenv(name, default))
     except ValueError as exc:
         raise ValueError(f"{name} must be a valid number.") from exc
+
+
+def _local_model_config(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    try:
+        if path.stat().st_size > 16384:
+            raise ValueError()
+        value = json.loads(path.read_text(encoding="utf-8-sig"))
+        allowed = {
+            "ZHIJING_MODEL_PROVIDER",
+            "ZHIJING_OPENAI_URL",
+            "ZHIJING_OPENAI_MODEL",
+            "ZHIJING_OPENAI_API_KEY",
+            "ZHIJING_OPENAI_TIMEOUT",
+            "ZHIJING_OPENAI_FORMAT",
+            "ZHIJING_OPENAI_MAX_TOKENS",
+            "ZHIJING_OPENAI_CONTEXT_WINDOW",
+            "ZHIJING_OPENAI_MAX_INPUT_CHARS",
+            "ZHIJING_OPENAI_THINKING",
+        }
+        if not isinstance(value, dict) or any(
+            k not in allowed or not isinstance(v, str) for k, v in value.items()
+        ):
+            raise ValueError()
+        return value
+    except (ValueError, OSError):
+        raise ValueError(
+            "Local model-config.json is invalid or unreadable; check its JSON string fields."
+        ) from None

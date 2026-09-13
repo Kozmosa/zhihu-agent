@@ -185,3 +185,22 @@ $env:ZHIJING_DATA_DIR = Join-Path (Get-Location) 'data'
 ```
 
 脚本校验 origin 地址和干净工作区，自动读取远端默认分支；仅对空仓库采用 main。有冲突时保留现场并停止推送，不执行强制推送、清理或重置。它只对当前项目使用单次 Git 目录信任参数，不修改全局配置。若认证失败，需要在当前终端可用的 GitHub 登录环境中再执行。
+
+
+### 启动时加载大模型配置
+
+默认 OpenAI 兼容地址为 `https://api.openai-next.com/v1`，模型为 `deepseek-v4-flash`。
+在实际数据目录放置 `model-config.json` 即可启动时自动启用：源码版默认 `data/`，Windows 打包版默认 `%LOCALAPPDATA%/ZhiJing/data/`；指定 `ZHIJING_DATA_DIR` 时以该目录为准。
+
+```json
+{
+  "ZHIJING_MODEL_PROVIDER": "openai",
+  "ZHIJING_OPENAI_URL": "https://api.openai-next.com/v1",
+  "ZHIJING_OPENAI_MODEL": "deepseek-v4-flash",
+  "ZHIJING_OPENAI_API_KEY": "填写本机密钥"
+}
+```
+
+此文件为本机明文凭证，已被 Git 忽略，请勿分享或打包。缺少本地配置时仍默认离线运行。
+显式设置任意 `ZHIJING_OPENAI_*`、`ZHIJING_OLLAMA_*` 或 `ZHIJING_MODEL_PROVIDER` 环境变量，会整体替代本地模型配置，避免把旧密钥发送到新地址。
+后台页面的“应用”仍仅修改当前会话；要更改启动配置，请编辑本地文件。已有旧版 exe 需要重新打包才能加载此文件。
