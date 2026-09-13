@@ -6,6 +6,7 @@
   <title>知境 · 随身助手</title>
   <link rel="stylesheet" href="/assets/companion.css">
   <link rel="stylesheet" href="/assets/question-import.css">
+  <link rel="stylesheet" href="/assets/knowledge-map.css">
 </head>
 <body data-desktop="__DESKTOP__" data-surface="companion">
 <div id="companion-root">
@@ -63,13 +64,14 @@
       <form id="tool-form-facts" class="composer"><label class="sr-only" for="tool-claims">待审查的主张，每行一条，最多五条</label><textarea id="tool-claims" required maxlength="10000" rows="3" placeholder="输入想核对的主张，每行一条…"></textarea><div class="composer-actions"><span>最多 5 条 · 仅对照本机资料</span><button id="tool-run-facts" type="submit" class="primary" disabled>核对主张</button></div><p id="tool-status-facts" class="status" role="status" aria-live="polite"></p></form>
     </section>
     <section id="tool-pane-knowledge" class="tool-pane" role="tabpanel" aria-labelledby="tool-tab-knowledge" hidden>
-      <div class="tool-heading"><h1>发现知识之间的联系</h1><p>从当前作者的资料中，查看概念与关系。</p></div>
+      <div class="tool-heading"><h1>发现知识之间的联系</h1><p>选择资料范围，探索联系并对照原文。</p></div>
       <div id="tool-result-knowledge" class="tool-result" role="region" aria-label="知识关系"></div>
-      <form id="tool-form-knowledge" class="composer action-only"><div class="composer-actions"><span>点开关系查看依据</span><button id="tool-run-knowledge" type="submit" class="primary" disabled>发现联系</button></div><p id="tool-status-knowledge" class="status" role="status" aria-live="polite"></p></form>
+      <form id="tool-form-knowledge" class="composer action-only"><div class="knowledge-controls"><label>资料范围<select id="tool-knowledge-scope"><option value="author">当前作者</option><option value="all">全部资料</option></select></label><label>最多篇数<select id="tool-knowledge-limit"><option value="10">10 篇</option><option value="20" selected>20 篇</option><option value="50">50 篇</option><option value="100">100 篇</option></select></label></div><div class="composer-actions"><span>点开关系查看依据</span><button id="tool-run-knowledge" type="submit" class="primary" disabled>发现联系</button></div><p id="tool-status-knowledge" class="status" role="status" aria-live="polite"></p></form>
     </section>
   </main>
   <footer class="companion-footer"><span class="presence-dot" aria-hidden="true"></span>你的阅读，随时继续<span class="footer-separator">·</span>关闭窗口即可收起</footer>
 </div>
+<script src="/assets/knowledge-map.js" nonce="__CONFIG_TOKEN__"></script>
 <script src="/assets/companion.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
 <script src="/assets/question-import.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
 </body>

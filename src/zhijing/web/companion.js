@@ -9,6 +9,14 @@
   const state = {selected: null, revision: 0, sources: [], page: 0, more: false,
     loading: false, choosing: false, importing: false, pending: {}, cards: [], cardIndex: 0,
     revealed: false, exporting: false, nextSourcePage: null};
+  let mapCleanup = null, mapRevision = 0;
+
+  function clearMap() {
+    mapRevision += 1;
+    const cleanup = mapCleanup;
+    mapCleanup = null;
+    if (typeof cleanup === 'function') cleanup();
+  }
 
   function node(tag, text, className) {
     const item = document.createElement(tag);
@@ -138,6 +146,7 @@
   }
 
   function choose(source) {
+    clearMap();
     state.selected = source;
     state.revision += 1;
     state.pending = {};
@@ -307,35 +316,22 @@
   }
 
   function renderMap(result) {
-    const root = $('tool-result-knowledge');
-    root.append(node('p', '范围：与当前资料关联的同一作者分组。' + (result.truncated ? '本次只整理前 20 条资料，未覆盖全部。' : ''), 'scope-note'));
-    root.append(node('p', notice([result.classification, result.analysis_notice].filter(Boolean).join('\n')), 'scope-note'));
-    if (!result.nodes?.length) { root.append(node('p', '当前范围尚无可展示的概念。')); return; }
-    const byId = new Map(result.nodes.map(item => [item.id, item]));
-    root.append(node('h3', '概念与资料'));
-    const list = (items, render, label) => {
-      let parent = root;
-      items.forEach((item, index) => {
-        if (index === 5) { parent = node('details', undefined, 'compact-result'); parent.append(node('summary', '展开其余 ' + (items.length - 5) + ' ' + label)); root.append(parent); }
-        parent.append(render(item));
-      });
-    };
-    list(result.nodes, entry => {
-      const item = node('details', undefined, 'compact-result');
-      item.append(node('summary', entry.data.label));
-      longText(item, entry.data.description || (entry.data.kind === 'answer' ? '已导入资料。' : '依据资料整理的主题。'));
-      if (entry.data.evidence?.length) citations(item, entry.data.evidence);
-      return item;
-    }, '个节点');
-    root.append(node('h3', '关系与依据'));
-    list(result.edges || [], edge => {
-      const item = node('details', undefined, 'compact-result');
-      item.append(node('summary', (byId.get(edge.source)?.data.label || '资料') + ' → ' + (byId.get(edge.target)?.data.label || '资料') + ' · ' + edge.label));
-      longText(item, edge.data?.explanation || '依据已导入资料建立的主题分类关系，并非客观事实证明。');
-      citations(item, edge.data?.evidence);
-      return item;
-    }, '条关系');
-    if (!result.edges?.length) root.append(node('p', '当前没有可展示的关系。'));
+    clearMap();
+    const revision = state.revision, generation = mapRevision;
+    const current = () => revision === state.revision && generation === mapRevision;
+    mapCleanup = globalThis.ZhijingKnowledgeMap.render($('tool-result-knowledge'), result, {
+      compact: true,
+      onOpenSource: async sourceId => {
+        if (!current()) return;
+        let source;
+        try { source = await request('/api/v1/sources/' + encodeURIComponent(sourceId)); }
+        catch (error) { if (current()) throw error; return; }
+        if (!current()) return;
+        choose(source);
+        tab('reading');
+        $('companion-source').focus();
+      },
+    });
   }
 
   async function run(tool) {
@@ -355,11 +351,19 @@
         if (!claims.length || claims.length > 5 || claims.some(claim => claim.length > 2000)) throw new Error('每行一条主张，最多 5 条，每条不超过 2,000 字。');
         path = '/api/v1/facts/review'; body = {claims, exclude_source_ids: [source.id]};
       }
-      if (tool === 'knowledge') path = '/api/v1/knowledge-map?' + new URLSearchParams({limit: 20, author_id: source.author_id});
+      if (tool === 'knowledge') {
+        const limit = Number($('tool-knowledge-limit').value);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('请选择 1 至 100 篇资料。');
+        const params = new URLSearchParams({limit, primary_source_id: source.id});
+        if ($('tool-knowledge-scope').value === 'author') params.set('author_id', source.author_id);
+        path = '/api/v1/knowledge-map?' + params;
+      }
     } catch (error) { status('tool-status-' + tool, error.message, 'error'); return; }
     const operation = {};
     state.pending[tool] = operation;
     const root = $('tool-result-' + tool);
+    if (tool === 'knowledge') clearMap();
+    const generation = mapRevision;
     root.replaceChildren(); root.setAttribute('aria-busy', 'true');
     if (tool === 'cards') { state.cards = []; state.exporting = false; }
     status('tool-status-' + tool, '正在整理，请稍候…');
@@ -367,16 +371,23 @@
     try {
       const result = await request(path, body);
       if (state.revision !== revision || state.pending[tool] !== operation) return;
+      if (tool === 'knowledge' && generation !== mapRevision) return;
       ({reading: renderReading, author: renderAnswer, cards: renderCards, facts: renderFacts, knowledge: renderMap})[tool](result);
       status('tool-status-' + tool, tool === 'reading' || tool === 'cards' ? '已整理' : '已完成', 'success');
     } catch (error) {
-      if (state.revision === revision && state.pending[tool] === operation) status('tool-status-' + tool, error.message, 'error');
+      if (state.revision === revision && state.pending[tool] === operation && (tool !== 'knowledge' || generation === mapRevision)) status('tool-status-' + tool, error.message, 'error');
     } finally {
       if (state.revision === revision && state.pending[tool] === operation) {
         delete state.pending[tool]; root.setAttribute('aria-busy', 'false'); controls();
       }
     }
   }
+
+  for (const id of ['tool-knowledge-scope', 'tool-knowledge-limit']) $(id).addEventListener('change', () => {
+    clearMap();
+    $('tool-result-knowledge').replaceChildren();
+    status('tool-status-knowledge', '范围已调整，请重新发现联系。');
+  });
 
   for (const tool of tools) {
     $('tool-tab-' + tool).addEventListener('click', () => tab(tool));

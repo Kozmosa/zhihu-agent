@@ -11,6 +11,9 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   const page = await fetch(base + '/workspace');
   assert.equal(page.status, 200);
   const html = await page.text();
+  assert(html.indexOf('/assets/knowledge-map.js') < html.indexOf('/assets/workspace.js'));
+  assert.match(html, /src="\/assets\/knowledge-map.js" nonce="[^"]+"/);
+  assert(html.includes('/assets/knowledge-map.css'));
   const nodes = new Map();
   const created = [];
   class Element {
@@ -24,6 +27,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
     closest(selector) {
       for(let node = this; node; node = node.parentNode) {
         if(selector.startsWith('#') && node.id === selector.slice(1)) return node;
+        if(selector.startsWith('.') && node.className.split(' ').includes(selector.slice(1))) return node;
       }
       return null;
     }
@@ -77,6 +81,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   }
   assert.equal(nodes.get('chat-empty').parentNode, nodes.get('chat-messages'), 'Fixture must model the real nested chat empty state');
   const requests = [], downloads = [], failures = new Map(), fixtures = new Map(), delays = new Map();
+  const mapRenders = [];
   let inFlight = 0;
   const stored = new Map();
   const sessionStorage = {getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, String(value)), removeItem: key => stored.delete(key)};
@@ -101,7 +106,17 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag),
     querySelectorAll: selector => created.filter(node => selector === 'button' ? node.tagName === 'button' : node.className.split(' ').includes(selector.slice(1))),
   };
-  const sandbox = {document, sessionStorage, CustomEvent: class { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } }, location: {hash: '#cards'}, URL: LocalURL, URLSearchParams, setTimeout: fn => fn(), fetch: async (url, options) => {
+  const sandbox = {document, sessionStorage, CustomEvent: class { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } }, location: {hash: '#cards'}, URL: LocalURL, URLSearchParams, setTimeout: fn => fn(),
+    // Rendering is tested by the shared component's own browser QA. Keep this
+    // host test focused on real requests, full response handoff and lifecycle.
+    ZhijingKnowledgeMap: {render(root, result, options) {
+      const wrapper = new Element('div'); wrapper.className = 'knowledge-map';
+      const disabledButton = new Element('button'); disabledButton.disabled = true;
+      const enabledButton = new Element('button'); enabledButton.disabled = false;
+      wrapper.append(disabledButton, enabledButton); root.append(wrapper);
+      const record = {result, options, root, disabledButton, enabledButton, cleanups: 0}; mapRenders.push(record);
+      return () => { record.cleanups++; };
+    }}, fetch: async (url, options) => {
     requests.push({url, options});
     inFlight++;
     try {
@@ -321,11 +336,85 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
 
   await submit('knowledge-form');
   assert.match(get('knowledge-status').className, /success/);
-  assert(created.some(node => node.tagName === 'svg'));
-  const picker = get('graph-node-picker'); picker.value = '0'; picker.events.change();
-  assert(created.some(node => node.className === 'graph-detail' && node.children.length));
-  const svgNode = created.find(node => node.className === 'graph-node');
-  svgNode.events.keydown({key: 'Enter', preventDefault() {}});
+  const firstMap = mapRenders.at(-1);
+  assert.equal(firstMap.options.compact, false);
+  assert.equal(firstMap.root, get('knowledge-result'));
+  assert(firstMap.result.nodes.some(node => node.data.source_id === primaryId));
+  assert(firstMap.result.edges.length > 0);
+  assert(firstMap.result.included_sources > 0);
+  assert.equal(firstMap.result.content_extent_counts.unknown, firstMap.result.included_sources);
+  const graphRequest = new URL(requests.find(row => row.url.startsWith('/api/v1/knowledge-map?')).url, base);
+  assert.equal(graphRequest.searchParams.get('primary_source_id'), primaryId);
+  assert.equal(graphRequest.searchParams.get('limit'), '20');
+  assert.equal(graphRequest.searchParams.has('author_id'), false);
+  assert.equal(firstMap.disabledButton.disabled, true, 'Host controls must preserve map-owned disabled state');
+  vm.runInContext('state.busy = true; controls()', sandbox);
+  assert.equal(firstMap.enabledButton.disabled, false, 'Map interactions stay available during other host tasks');
+  vm.runInContext('state.busy = false; controls()', sandbox);
+  get('graph-scope').value = 'author'; get('graph-limit').value = '1';
+  get('graph-scope').events.change();
+  assert.equal(firstMap.cleanups, 1);
+  assert.equal(get('knowledge-result').children.length, 0);
+  assert.match(get('knowledge-status').textContent, /范围已调整/);
+  await submit('knowledge-form');
+  const authorMapRequest = new URL(requests.filter(row => row.url.startsWith('/api/v1/knowledge-map?')).at(-1).url, base);
+  assert.equal(authorMapRequest.searchParams.get('author_id'), primary.author_id);
+  assert.equal(authorMapRequest.searchParams.get('limit'), '1');
+  assert.equal(authorMapRequest.searchParams.get('primary_source_id'), primaryId);
+  assert.equal(firstMap.cleanups, 1);
+  const liveMap = mapRenders.at(-1);
+  await liveMap.options.onOpenSource(otherChatSource.id); await idle();
+  assert.equal(vm.runInContext('state.selected.id', sandbox), otherChatSource.id);
+  assert.equal(get('pane-reading').hidden, false);
+  assert.equal(liveMap.cleanups, 1);
+  assert.equal(get('knowledge-result').children.length, 0);
+  const beforeDisposedOpen = requests.length;
+  await liveMap.options.onOpenSource(primaryId);
+  assert.equal(requests.length, beforeDisposedOpen);
+  vm.runInContext('select(fixturePrimary)', sandbox); await idle();
+  get('graph-scope').value = 'all'; get('graph-limit').value = '20';
+
+  await submit('knowledge-form');
+  const navigationMap = mapRenders.at(-1);
+  let releaseMapSource;
+  const otherSourcePath = '/api/v1/sources/' + encodeURIComponent(otherChatSource.id);
+  delays.set(otherSourcePath, new Promise(resolve => { releaseMapSource = resolve; }));
+  const openingMapSource = navigationMap.options.onOpenSource(otherChatSource.id);
+  vm.runInContext('select(fixtureChatOther); select(fixturePrimary)', sandbox);
+  releaseMapSource(); await openingMapSource; delays.delete(otherSourcePath); await idle();
+  assert.equal(vm.runInContext('state.selected.id', sandbox), primaryId, 'Map source navigation must discard A-to-B-to-A responses');
+  const mapPath = '/api/v1/knowledge-map?' + new URLSearchParams({limit: '20', primary_source_id: primaryId});
+  for (const staleError of [false, true]) {
+    let releaseMap;
+    delays.set(mapPath, new Promise(resolve => { releaseMap = resolve; }));
+    if (staleError) failures.set(mapPath, 'Stale map error must be discarded');
+    const mapCountBefore = mapRenders.length;
+    const requestCountBefore = requests.filter(row => row.url === mapPath).length;
+    const pendingMap = get('knowledge-form').events.submit({preventDefault() {}});
+    const deadline = Date.now() + 5000;
+    while(requests.filter(row => row.url === mapPath).length === requestCountBefore && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(requests.filter(row => row.url === mapPath).length, requestCountBefore + 1);
+    vm.runInContext('select(fixtureChatOther); select(fixturePrimary)', sandbox);
+    releaseMap(); await pendingMap; await idle();
+    assert.equal(mapRenders.length, mapCountBefore);
+    assert.equal(get('knowledge-result').children.length, 0);
+    assert.equal(get('knowledge-status').textContent, '');
+    delays.delete(mapPath); failures.delete(mapPath);
+  }
+  let releaseScopeMap;
+  delays.set(mapPath, new Promise(resolve => { releaseScopeMap = resolve; }));
+  const mapsBeforeScopeChange = mapRenders.length;
+  const callsBeforeScopeChange = requests.filter(row => row.url === mapPath).length;
+  const scopeMap = get('knowledge-form').events.submit({preventDefault() {}});
+  const scopeDeadline = Date.now() + 5000;
+  while(requests.filter(row => row.url === mapPath).length === callsBeforeScopeChange && Date.now() < scopeDeadline) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(requests.filter(row => row.url === mapPath).length, callsBeforeScopeChange + 1);
+  get('graph-limit').value = '10'; get('graph-limit').events.input();
+  releaseScopeMap(); await scopeMap; await idle(); delays.delete(mapPath);
+  assert.equal(mapRenders.length, mapsBeforeScopeChange);
+  assert.match(get('knowledge-status').textContent, /范围已调整/);
+  assert.equal(get('knowledge-result').children.length, 0);
+  assert.equal(get('run-knowledge').disabled, false);
 
   failures.set('/api/v1/cards/generate', 'Fixture upstream failure');
   await submit('cards-form');

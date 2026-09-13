@@ -14,11 +14,16 @@ def test_workspace_assets_are_packaged_and_local_only(tmp_path):
         assert page.status_code == 200
         assert "__CONFIG_TOKEN__" not in page.text
         assert 'src="/assets/workspace.js"' in page.text
+        assert page.text.index('/assets/knowledge-map.js') < page.text.index('/assets/workspace.js')
+        assert f'src="/assets/knowledge-map.js" nonce="{client.app.state.config_token}"' in page.text
+        assert 'href="/assets/knowledge-map.css"' in page.text
         assert "nonce-" + client.app.state.config_token in page.headers["content-security-policy"]
         assert "style-src 'self'" in page.headers["content-security-policy"]
         for filename, content_type in [
             ("workspace.js", "text/javascript"),
             ("workspace.css", "text/css"),
+            ("knowledge-map.js", "text/javascript"),
+            ("knowledge-map.css", "text/css"),
         ]:
             response = client.get("/assets/" + filename)
             assert response.status_code == 200
@@ -30,3 +35,5 @@ def test_workspace_assets_are_packaged_and_local_only(tmp_path):
     with TestClient(create_app(Settings(data_dir=tmp_path)), client=("192.0.2.3", 12345)) as client:
         assert client.get("/workspace").status_code == 403
         assert client.get("/assets/workspace.js").status_code == 403
+        assert client.get("/assets/knowledge-map.js").status_code == 403
+        assert client.get("/assets/knowledge-map.css").status_code == 403

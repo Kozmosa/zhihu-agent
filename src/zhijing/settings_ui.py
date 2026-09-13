@@ -130,6 +130,8 @@ def workspace_asset(filename: str):
         "companion.css",
         "question-import.js",
         "question-import.css",
+        "knowledge-map.js",
+        "knowledge-map.css",
     }:
         raise DomainError("asset_not_found", "未找到页面资源。", 404)
     return FileResponse(

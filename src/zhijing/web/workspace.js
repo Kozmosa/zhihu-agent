@@ -8,6 +8,14 @@ const tasks = ['reading', 'author', 'cards', 'facts', 'knowledge'];
 const state = {selected: null, selectionRevision: 0, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive', zhihuConfigured: false, zhihuResults: []};
 const pageSize = 20;
 const mobileLayout = globalThis.matchMedia?.('(max-width: 720px)');
+let mapCleanup = null, mapRevision = 0;
+
+function clearMap() {
+  mapRevision += 1;
+  const cleanup = mapCleanup;
+  mapCleanup = null;
+  if (typeof cleanup === 'function') cleanup();
+}
 
 function isSmallScreen() {
   return mobileLayout?.matches ?? (globalThis.innerWidth ?? Infinity) <= 720;
@@ -56,8 +64,8 @@ function status(id, text, kind = '') {
 function controls() {
   const chatRoot = document.getElementById('chat-root');
   const questionImport = document.getElementById('question-import-dialog');
-  document.querySelectorAll('button').forEach(button => { if (!chatRoot?.contains(button) && !questionImport?.contains(button)) button.disabled = state.busy; });
-  document.querySelectorAll('.requires-source').forEach(button => { button.disabled = state.busy || !state.selected; });
+  document.querySelectorAll('button').forEach(button => { if (!chatRoot?.contains(button) && !questionImport?.contains(button) && !button.closest('.knowledge-map')) button.disabled = state.busy; });
+  document.querySelectorAll('.requires-source').forEach(button => { if (!button.closest('.knowledge-map')) button.disabled = state.busy || !state.selected; });
   $('prev-page').disabled = state.busy || state.page === 0;
   $('next-page').disabled = state.busy || !state.more;
   $('export-tsv').disabled = $('export-apkg').disabled = state.busy || !state.cards.length;
@@ -174,6 +182,7 @@ function safeLink(node, value) {
 }
 
 function select(source, notifyChat = true) {
+  clearMap();
   state.selected = source;
   state.selectionRevision += 1;
   rememberSource(source);
@@ -319,95 +328,43 @@ function renderFacts(result) {
   }
 }
 
-function svg(tag, attributes = {}, text) {
-  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, String(value));
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
 function renderGraph(result) {
-  const root = $('knowledge-result');
-  root.append(element('p', userNotice(result.classification + '\n' + result.analysis_notice), 'scope-note prose'));
-  if (!result.nodes.length) { root.append(element('div', '当前范围还没有知识节点。请先导入资料，或调整范围。', 'empty')); return; }
-  const preview = result.nodes.slice(0, 60);
-  const positions = new Map(preview.map((node, index) => [node.id, {x: 40 + (index % 3) * 300, y: 35 + Math.floor(index / 3) * 115}]));
-  const height = Math.ceil(preview.length / 3) * 115 + 30;
-  const canvas = svg('svg', {width: 960, height, viewBox: '0 0 960 ' + height, role: 'group', 'aria-label': '知识关系图，点击节点查看解释；也可使用下方节点列表'});
-  canvas.append(svg('title', {}, '知识地图'));
-  const defs = svg('defs');
-  const marker = svg('marker', {id: 'relation-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse'});
-  marker.append(svg('path', {d: 'M 0 0 L 10 5 L 0 10 z', fill: '#a9b8a3'}));
-  defs.append(marker); canvas.append(defs);
-  for (const edge of result.edges) {
-    const start = positions.get(edge.source), end = positions.get(edge.target);
-    if (!start || !end) continue;
-    const sx = start.x + 125, sy = start.y + 62, ex = end.x + 125, ey = end.y;
-    const path = svg('path', {d: `M ${sx} ${sy} C ${sx} ${sy + 25}, ${ex} ${ey - 25}, ${ex} ${ey}`, class: 'graph-edge', 'marker-end': 'url(#relation-arrow)'});
-    path.append(svg('title', {}, edge.label)); canvas.append(path);
-  }
-  const detail = element('div', '选择一个节点，查看解释与原文证据。', 'graph-detail');
-  const picker = element('select'); picker.id = 'graph-node-picker';
-  const label = element('label', '查看节点'); label.htmlFor = picker.id;
-  picker.append(element('option', '请选择节点…')); picker.children[0].value = '';
-  const showNode = node => {
-    detail.replaceChildren(element('h3', node.data.label), element('p', node.data.description || (node.data.kind === 'answer' ? '资料节点，来自已导入文章。' : '主题分类节点。'), 'prose'));
-    citations(detail, node.data.evidence);
-    if (node.data.source_id) {
-      const open = element('button', '选中这篇资料'); open.type = 'button';
-      open.addEventListener('click', () => job('knowledge-status', '正在读取资料…', async () => {
-        const source = await request('/api/v1/sources/' + encodeURIComponent(node.data.source_id));
-        select(source); tab('reading');
-      }));
-      detail.append(open);
-    }
-  };
-  result.nodes.forEach((node, index) => { const option = element('option', node.data.label); option.value = String(index); picker.append(option); });
-  picker.addEventListener('change', () => { if (picker.value !== '') showNode(result.nodes[Number(picker.value)]); });
-  preview.forEach(node => {
-    const point = positions.get(node.id);
-    const group = svg('g', {class: 'graph-node', 'data-kind': node.data.kind, tabindex: 0, role: 'button', 'aria-label': node.data.label, transform: `translate(${point.x},${point.y})`});
-    group.append(svg('rect', {width: 250, height: 62, rx: 10}), svg('title', {}, node.data.label));
-    group.append(svg('text', {x: 15, y: 27}, node.data.label.slice(0, 16)), svg('text', {x: 15, y: 47}, node.data.label.slice(16, 31) + (node.data.label.length > 31 ? '…' : '')));
-    const activate = () => { picker.value = String(result.nodes.indexOf(node)); showNode(node); };
-    group.addEventListener('click', activate);
-    group.addEventListener('keydown', event => { if (['Enter', ' '].includes(event.key)) { event.preventDefault(); activate(); } });
-    canvas.append(group);
+  clearMap();
+  const revision = state.selectionRevision, generation = mapRevision;
+  const current = () => revision === state.selectionRevision && generation === mapRevision;
+  mapCleanup = globalThis.ZhijingKnowledgeMap.render($('knowledge-result'), result, {
+    compact: false,
+    onOpenSource: async sourceId => {
+      if (!current()) return;
+      let source;
+      try { source = await request('/api/v1/sources/' + encodeURIComponent(sourceId)); }
+      catch (error) { if (current()) throw error; return; }
+      if (!current()) return;
+      select(source);
+      tab('reading');
+      $('selected-title').scrollIntoView?.({block: 'nearest'});
+    },
   });
-  const scroller = element('div', undefined, 'graph-scroll'); scroller.append(canvas);
-  root.append(scroller);
-  if (result.nodes.length > preview.length) root.append(element('p', '图示显示前 60 个节点，下方列表包含全部节点。', 'muted small'));
-  root.append(label, picker, detail, element('h3', '关系与证据'));
-  const relations = element('div', undefined, 'relation-list');
-  const byId = new Map(result.nodes.map(node => [node.id, node]));
-  for (const edge of result.edges) {
-    const title = (byId.get(edge.source)?.data.label || edge.source) + ' → ' + (byId.get(edge.target)?.data.label || edge.target) + ' · ' + edge.label;
-    const button = element('button', title); button.type = 'button';
-    button.addEventListener('click', () => {
-      detail.replaceChildren(element('h3', title), element('p', edge.data?.explanation || '根据资料主题标签建立的分类关系。', 'prose'));
-      if (edge.data?.evidence?.length) citations(detail, edge.data.evidence);
-    });
-    relations.append(button);
-  }
-  if (!result.edges.length) relations.append(element('p', '当前没有可展示的关系。', 'muted'));
-  root.append(relations);
 }
 
 async function runTask(task, work) {
   return job(task + '-status', '正在处理，请稍候…', async () => {
+    if (task === 'knowledge') clearMap();
     $(task + '-result').replaceChildren();
     if (task === 'cards') state.cards = [];
     const revision = state.selectionRevision;
+    const generation = mapRevision;
+    const current = () => state.selectionRevision === revision && (task !== 'knowledge' || generation === mapRevision);
     let result;
     try {
       await refreshMode();
-      if (state.selectionRevision !== revision) return;
+      if (!current()) return;
       result = await work();
     } catch (error) {
-      if (state.selectionRevision !== revision) return;
+      if (!current()) return;
       throw error;
     }
-    if (state.selectionRevision !== revision) return;
+    if (!current()) return;
     ({reading: renderReading, author: renderAnswer, cards: renderCards, facts: renderFacts, knowledge: renderGraph})[task](result);
     let extra = task === 'cards' ? result.notice : '';
     if (task === 'knowledge') extra = `${result.nodes.length} 个节点 · ${result.edges.length} 条关系 · 范围内 ${result.total_sources} 篇资料` + (result.truncated ? '\n本次仅使用数量上限内的资料，未覆盖整个范围。' : '');
@@ -565,8 +522,17 @@ $('facts-form').addEventListener('submit', event => { event.preventDefault(); re
   if (!claims.length || claims.length > 20 || claims.some(value => value.length > 2000)) throw new Error('请填写 1 至 20 条主张，每条最多 2,000 字符。');
   return request('/api/v1/facts/review', {claims, author_id: authorScope('fact-scope'), exclude_source_ids: $('exclude-current').checked && state.selected ? [state.selected.id] : []});
 }); });
+function resetMapScope() {
+  clearMap();
+  $('knowledge-result').replaceChildren();
+  status('knowledge-status', '范围已调整，请重新生成知识地图。');
+}
+$('graph-scope').addEventListener('change', resetMapScope);
+$('graph-limit').addEventListener('input', resetMapScope);
+$('graph-limit').addEventListener('change', resetMapScope);
 $('knowledge-form').addEventListener('submit', event => { event.preventDefault(); return runTask('knowledge', () => {
   const params = new URLSearchParams({limit: $('graph-limit').value});
+  if (state.selected) params.set('primary_source_id', state.selected.id);
   const author = authorScope('graph-scope'); if (author) params.set('author_id', author);
   return request('/api/v1/knowledge-map?' + params);
 }); });

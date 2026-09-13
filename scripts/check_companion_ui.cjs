@@ -20,6 +20,7 @@ function source(index) {
 
 function environment({savedId, storageFails = false} = {}) {
   const nodes = new Map(), created = [], requests = [], downloads = [], gates = new Map(), failures = new Map();
+  const mapRenders = [];
   const stored = new Map(savedId ? [[storageKey, savedId]] : []);
   const sources = Array.from({length: 25}, (_, index) => source(index + 1));
   sources[1].content_extent = 'excerpt';
@@ -43,6 +44,11 @@ function environment({savedId, storageFails = false} = {}) {
   for (const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
     const item = new Element(match[1]); item.id = match[3];
     item.hidden = /\bhidden\b/.test(match[2]); item.open = /\bopen\b/.test(match[2]);
+  }
+  for (const match of html.matchAll(/<select\b[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g)) {
+    const options = [...match[2].matchAll(/<option\b([^>]*)>/g)];
+    const selected = options.find(option => /\bselected\b/.test(option[1])) || options[0];
+    nodes.get(match[1]).value = selected?.[1].match(/\bvalue="([^"]*)"/)?.[1] || '';
   }
   const body = new Element('body');
   const documentListeners = new Map();
@@ -79,7 +85,7 @@ function environment({savedId, storageFails = false} = {}) {
     if (url.pathname === '/api/v1/facts/review') return {scope: '仅检查已导入资料，不等同于客观事实判定。', analysis_notice: '当前采用规则整理。',
       reviews: body.claims.map(claim => ({claim, status: 'related_evidence', explanation: '存在相关资料，仍需核对。', evidence: [evidence]}))};
     if (url.pathname === '/api/v1/knowledge-map') return {classification: '主题分类关系，并非事实证明。', analysis_notice: '按资料主题整理。', truncated: true,
-      total_sources: 25, nodes: Array.from({length: 8}, (_, index) => ({id: 'n' + index, data: {label: '概念 ' + index, kind: 'topic', description: '原文概念', evidence: [evidence]}})),
+      total_sources: 25, included_sources: 20, content_extent_counts: {fulltext: 0, excerpt: 1, unknown: 19}, nodes: Array.from({length: 8}, (_, index) => ({id: 'n' + index, data: {label: '概念 ' + index, kind: 'topic', description: '原文概念', evidence: [evidence]}})),
       edges: [{source: 'n0', target: 'n1', label: '相关', data: {explanation: '同一资料提及', evidence: [evidence]}}]};
     throw Error('Unexpected endpoint: ' + url.pathname);
   };
@@ -88,6 +94,13 @@ function environment({savedId, storageFails = false} = {}) {
     static revokeObjectURL() {}
   }
   const sandbox = {document, sessionStorage, URL: TestURL, URLSearchParams,
+    // The shared map owns its own DOM tests. This stub verifies the host lifecycle
+    // and receives the full response unchanged, including evidence and coverage.
+    ZhijingKnowledgeMap: {render(root, result, options) {
+      const record = {root, result, options, cleanups: 0}; mapRenders.push(record);
+      const wrapper = new Element('div'); wrapper.className = 'knowledge-map'; root.append(wrapper);
+      return () => { record.cleanups++; };
+    }},
     crypto: {randomUUID: () => 'synthetic-' + (++sequence)}, setTimeout: callback => callback(),
     fetch: async (relative, options) => {
       assert(relative.startsWith('/api/v1/'), 'Only local application endpoints are permitted');
@@ -115,11 +128,14 @@ function environment({savedId, storageFails = false} = {}) {
   const submit = async tool => { await event('tool-form-' + tool, 'submit'); await idle(); };
   const select = async id => { get('companion-source').value = id; await event('companion-source', 'change'); };
   const defer = pathname => { let resolve; gates.set(pathname, new Promise(done => { resolve = done; })); return resolve; };
-  return {nodes, get, text, requests, downloads, sources, stored, failures, created, idle, event, click, submit, select, defer, document};
+  return {nodes, get, text, requests, downloads, sources, stored, failures, created, idle, event, click, submit, select, defer, document, mapRenders};
 }
 
 (async () => {
   assert(!html.includes('/assets/workspace.js'), 'The companion must not load workspace handlers');
+  assert(html.indexOf('/assets/knowledge-map.js') < html.indexOf('/assets/companion.js'));
+  assert.match(html, /src="\/assets\/knowledge-map.js" nonce="__CONFIG_TOKEN__"/);
+  assert(html.includes('/assets/knowledge-map.css'));
   const ui = environment(); await ui.idle();
   assert.equal(ui.get('tool-pane-author').hidden, false);
   for (const tool of toolNames) assert.equal(ui.get('tool-run-' + tool).disabled, true);
@@ -188,10 +204,71 @@ function environment({savedId, storageFails = false} = {}) {
   const mapRequest = new URL(ui.requests.find(item => item.path === '/api/v1/knowledge-map').relative, 'http://127.0.0.1');
   assert.equal(mapRequest.searchParams.get('limit'), '20');
   assert.equal(mapRequest.searchParams.get('author_id'), 'author-2');
-  assert.match(ui.text(ui.get('tool-result-knowledge')), /未覆盖全部/);
-  assert.match(ui.text(ui.get('tool-result-knowledge')), /展开其余 3 个节点/);
-  assert(!ui.created.some(item => item.tagName === 'svg'));
-  cases.push('facts exclude current across full library; compact author map and truncation');
+  assert.equal(mapRequest.searchParams.get('primary_source_id'), 'source-2');
+  const firstMap = ui.mapRenders.at(-1);
+  assert.equal(firstMap.options.compact, true);
+  assert.equal(firstMap.root, ui.get('tool-result-knowledge'));
+  assert.equal(firstMap.result.truncated, true);
+  assert.equal(firstMap.result.nodes.length, 8);
+  assert.equal(firstMap.result.included_sources, 20);
+  assert.equal(firstMap.result.content_extent_counts.excerpt, 1);
+  assert.equal(firstMap.result.edges[0].data.evidence[0].excerpt, '<script>不可执行的原文</script>');
+  ui.get('tool-knowledge-scope').value = 'all'; ui.get('tool-knowledge-limit').value = '50';
+  await ui.submit('knowledge');
+  const allMapRequest = new URL(ui.requests.filter(item => item.path === '/api/v1/knowledge-map').at(-1).relative, 'http://127.0.0.1');
+  assert.equal(allMapRequest.searchParams.has('author_id'), false);
+  assert.equal(allMapRequest.searchParams.get('limit'), '50');
+  assert.equal(allMapRequest.searchParams.get('primary_source_id'), 'source-2');
+  assert.equal(firstMap.cleanups, 1);
+  const beforeInvalid = ui.requests.length;
+  for (const invalid of ['0', '101', '1.5', '']) {
+    ui.get('tool-knowledge-limit').value = invalid; await ui.submit('knowledge');
+    assert.equal(ui.requests.length, beforeInvalid);
+  }
+  ui.get('tool-knowledge-limit').value = '20';
+  const liveMap = ui.mapRenders.at(-1);
+  await liveMap.options.onOpenSource('source-1');
+  assert.equal(ui.get('companion-source').value, 'source-1');
+  assert.equal(ui.get('tool-pane-reading').hidden, false);
+  assert.equal(liveMap.cleanups, 1);
+  assert.equal(ui.get('tool-result-knowledge').children.length, 0);
+  const beforeStaleOpen = ui.requests.length;
+  await liveMap.options.onOpenSource('source-2');
+  assert.equal(ui.requests.length, beforeStaleOpen, 'Disposed map must not initiate a source request');
+  cases.push('fact exclusion; shared map coverage and evidence; author/all scope, bounded count, source navigation and cleanup');
+
+  await ui.submit('knowledge');
+  const activeMap = ui.mapRenders.at(-1);
+  const releaseMapSource = ui.defer('/api/v1/sources/source-2');
+  const openingMapSource = activeMap.options.onOpenSource('source-2');
+  await ui.select('source-3'); await ui.select('source-1');
+  releaseMapSource(); await openingMapSource;
+  assert.equal(ui.get('companion-source').value, 'source-1', 'Old map navigation must not override A-to-B-to-A selection');
+  const beforeStaleMap = ui.mapRenders.length;
+  const releaseMap = ui.defer('/api/v1/knowledge-map');
+  const pendingMap = ui.event('tool-form-knowledge', 'submit');
+  await ui.select('source-2'); await ui.select('source-1');
+  releaseMap(); await pendingMap;
+  assert.equal(ui.mapRenders.length, beforeStaleMap);
+  assert.equal(ui.get('tool-result-knowledge').children.length, 0);
+  cases.push('shared map and source-link A-to-B-to-A responses are discarded after selection changes');
+
+  await ui.submit('knowledge');
+  const mapBeforeScopeChange = ui.mapRenders.at(-1);
+  ui.get('tool-knowledge-scope').value = 'author';
+  await ui.event('tool-knowledge-scope', 'change');
+  assert.equal(mapBeforeScopeChange.cleanups, 1);
+  assert.equal(ui.get('tool-result-knowledge').children.length, 0);
+  assert.match(ui.get('tool-status-knowledge').textContent, /范围已调整/);
+  const mapCountBeforeScopeRace = ui.mapRenders.length;
+  const releaseScopeMap = ui.defer('/api/v1/knowledge-map');
+  const scopeMap = ui.event('tool-form-knowledge', 'submit');
+  ui.get('tool-knowledge-limit').value = '10'; await ui.event('tool-knowledge-limit', 'change');
+  releaseScopeMap(); await scopeMap;
+  assert.equal(ui.mapRenders.length, mapCountBeforeScopeRace);
+  assert.match(ui.get('tool-status-knowledge').textContent, /范围已调整/);
+  assert.equal(ui.get('tool-run-knowledge').disabled, false);
+  cases.push('changing map scope clears the old map and discards a pending result without auto-requesting');
 
   ui.get('companion-import-text').value = '  ' + '仅正文'.repeat(12) + '\n第二行保留。';
   await ui.event('companion-import-form', 'submit'); await ui.idle();
