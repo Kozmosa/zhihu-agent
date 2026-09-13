@@ -32,4 +32,11 @@ model-config.json
 model-config.dpapi.json
 .model-config-*.tmp
 
+# Private exports are local even when saved outside the data directory.
+*.pem
+*.key
+cookies.txt
+cookies.json
+*.har
+
 node_modules/

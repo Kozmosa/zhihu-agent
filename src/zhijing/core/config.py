@@ -10,6 +10,7 @@ from typing import ClassVar
 from urllib.parse import urlsplit
 
 from zhijing.core.credentials import load_model_profile
+from zhijing.core.redaction import SecretRedactor
 
 
 @dataclass(frozen=True)
@@ -41,9 +42,11 @@ class Settings:
     def validation_errors(self) -> list[str]:
         errors = []
         # Also catch an accidental paste into fields that are returned by the status API.
+        redactor = SecretRedactor(
+            (self.openai_api_key, self.ollama_api_key, self.zhihu_access_secret)
+        )
         if any(
-            secret and secret in public
-            for secret in (self.openai_api_key, self.ollama_api_key, self.zhihu_access_secret)
+            redactor.contains(public)
             for public in (self.openai_url, self.openai_model, self.ollama_url, self.ollama_model)
         ):
             errors.append("API 密钥不能出现在模型地址或模型名称中。")

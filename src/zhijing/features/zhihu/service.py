@@ -182,6 +182,11 @@ class ZhihuSearchService:
             except (ValidationError, ValueError):
                 skipped += 1
                 continue
+            # HTML normalization can join fragments or decode entities into a
+            # credential that was absent from the raw upstream representation.
+            if self.transport.contains_secret(draft.model_dump(mode="json")):
+                skipped += 1
+                continue
             if len(items) >= count:
                 skipped += 1
             else:
