@@ -10,3 +10,15 @@
 @media(prefers-reduced-motion:reduce){.knowledge-map *{scroll-behavior:auto!important;transition:none!important}}
 .knowledge-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%;margin:0 0 9px}.knowledge-controls label{display:flex;gap:7px;align-items:center;font-size:10px;color:#8290a6;min-width:0;flex:1}.knowledge-controls select{font:inherit;color:#5f7191;border:1px solid #e2e8f3;border-radius:7px;background:#f8faff;padding:5px 6px;min-width:0;max-width:100%}.knowledge-controls label:first-child select{flex:1}.knowledge-controls label:last-child{flex:0 0 auto}
 .knowledge-map .km-node-label{font-size:15px}.knowledge-map .km-node-kind{font-size:11px}
+/* Keep the actual diagram visible above the fold in the 480 x 700 companion. */
+#tool-pane-knowledge:has(.knowledge-map)>.tool-heading{display:none}
+#tool-pane-knowledge>.composer{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:3px;padding:10px 14px}
+#tool-pane-knowledge>.composer .knowledge-controls{width:auto;margin:0;gap:7px}
+#tool-pane-knowledge>.composer .knowledge-controls label{font-size:0;gap:0}
+#tool-pane-knowledge>.composer .knowledge-controls select{font-size:11px;padding:6px}
+#tool-pane-knowledge>.composer .composer-actions{margin:0;gap:0;align-self:center}
+#tool-pane-knowledge>.composer .composer-actions>span{display:none}
+#tool-pane-knowledge>.composer .composer-actions button{padding:7px 10px;font-size:11px}
+#tool-pane-knowledge>.composer>.status{grid-column:1/-1;margin:0;line-height:1.4;min-height:0;font-size:9px}
+.km-compact .km-overview{margin:2px 0 5px;align-items:center}.km-compact .km-overview>div{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.km-compact .km-overview h3{display:none}.km-compact .km-overview .km-eyebrow{margin:0;letter-spacing:0}.km-compact .km-count{margin:0!important}.km-compact .km-export{margin:0}
+.km-compact .km-notice{border:0;border-radius:0;background:transparent;padding:0;margin:4px 0 7px}.km-compact .km-notice>summary{padding:0;background:transparent}.km-compact .km-toolbar{margin:6px 0 9px}.km-compact .km-search-label{font-size:0}.km-compact .km-search{margin:0}.km-compact .km-diagram-status{padding-bottom:2px}
