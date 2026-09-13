@@ -58,7 +58,6 @@ def test_structured_request_paths_formats_and_auth(base, format_name):
         {"response": '{"count": 0}'},
         {"response": '{"count": 2, "extra": 3}'},
         {"response": '{"count": 2}', "done": False},
-        {"response": '{"count": 2}', "done_reason": "length"},
         [],
         {"response": "x" * 256001},
     ],

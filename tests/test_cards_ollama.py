@@ -72,17 +72,19 @@ def test_cards_reject_fabricated_or_stitched_evidence(repository, evidence):
     generator = CardsModel([example_card(evidence_excerpt=evidence)])
     with pytest.raises(DomainError) as error:
         CardService(repository, generator).generate(CardRequest(source_id="source-1"))
-    assert error.value.code == "model_invalid_response"
+    assert error.value.code == "cards_evidence_invalid"
     assert error.value.status == 502
 
 
 @pytest.mark.parametrize("count", [1, 2])
-def test_cards_reject_excess_count_or_duplicate_questions(repository, count):
+def test_cards_limit_excess_count_and_merge_duplicate_questions(repository, count):
     generator = CardsModel([example_card(), example_card()])
-    with pytest.raises(DomainError) as error:
-        CardService(repository, generator).generate(CardRequest(source_id="source-1", count=count))
-    assert error.value.code == "model_invalid_response"
-    assert error.value.status == 502
+    result = CardService(repository, generator).generate(
+        CardRequest(source_id="source-1", count=count)
+    )
+    assert len(result.cards) == 1
+    assert result.cards[0].evidence_excerpt in repository.get("source-1").text
+    assert "已跳过 1 张" in result.notice
 
 
 def test_insufficient_material_may_produce_zero_cards(repository):

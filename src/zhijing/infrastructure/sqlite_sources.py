@@ -10,7 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from zhijing.core.errors import DomainError
-from zhijing.domain.models import Source, SourceDraft, SourcePage
+from zhijing.domain.models import Source, SourceDraft, SourceGroup, SourceGroupPage, SourcePage
+from zhijing.domain.source_identity import source_question_id
 
 
 class SQLiteSourceRepository:
@@ -35,12 +36,29 @@ class SQLiteSourceRepository:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connection() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
+            # Serialize schema upgrades and roll back both columns and backfill on failure.
+            connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS sources "
                 "(id TEXT PRIMARY KEY, author_id TEXT NOT NULL, payload TEXT NOT NULL)"
             )
             connection.execute("CREATE INDEX IF NOT EXISTS idx_author ON sources(author_id)")
-            connection.execute("PRAGMA user_version=1")
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(sources)")}
+            if "question_id" not in columns:
+                connection.execute("ALTER TABLE sources ADD COLUMN question_id TEXT")
+                for source_id, payload in connection.execute(
+                    "SELECT id, payload FROM sources"
+                ).fetchall():
+                    connection.execute(
+                        "UPDATE sources SET question_id = ? WHERE id = ?",
+                        (source_question_id(Source.model_validate_json(payload)), source_id),
+                    )
+            if "deleted" not in columns:
+                connection.execute(
+                    "ALTER TABLE sources ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0"
+                )
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_question ON sources(question_id)")
+            connection.execute("PRAGMA user_version=2")
 
     def save(self, draft: SourceDraft) -> Source:
         return self.save_many([draft])[0]
@@ -51,9 +69,14 @@ class SQLiteSourceRepository:
             for draft in drafts:
                 source = self._prepare(draft)
                 connection.execute(
-                    "INSERT INTO sources (id, author_id, payload) VALUES (?, ?, ?) "
-                    "ON CONFLICT(id) DO NOTHING",
-                    (source.id, source.author_id, source.model_dump_json()),
+                    "INSERT INTO sources (id, author_id, payload, question_id) VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(id) DO UPDATE SET deleted = 0",
+                    (
+                        source.id,
+                        source.author_id,
+                        source.model_dump_json(),
+                        source_question_id(source),
+                    ),
                 )
                 row = connection.execute(
                     "SELECT payload FROM sources WHERE id = ?", (source.id,)
@@ -82,14 +105,19 @@ class SQLiteSourceRepository:
     def get(self, source_id: str) -> Source | None:
         with self._connection() as connection:
             row = connection.execute(
-                "SELECT payload FROM sources WHERE id = ?", (source_id,)
+                "SELECT payload FROM sources WHERE id = ? AND deleted = 0", (source_id,)
             ).fetchone()
         return Source.model_validate_json(row[0]) if row else None
 
     def list(
-        self, author_id: str | None = None, *, offset: int = 0, limit: int | None = None
+        self,
+        author_id: str | None = None,
+        *,
+        offset: int = 0,
+        limit: int | None = None,
+        question_id: str | None = None,
     ) -> list[Source]:
-        where, params = self._filter(author_id)
+        where, params = self._filter(author_id, question_id=question_id)
         query = "SELECT payload FROM sources" + where + " ORDER BY id LIMIT ? OFFSET ?"
         with self._connection() as connection:
             rows = connection.execute(
@@ -98,12 +126,17 @@ class SQLiteSourceRepository:
         return [Source.model_validate_json(row[0]) for row in rows]
 
     @staticmethod
-    def _filter(author_id: str | None, query: str = "") -> tuple[str, list[str]]:
-        conditions = []
+    def _filter(
+        author_id: str | None, query: str = "", question_id: str | None = None
+    ) -> tuple[str, list[str]]:
+        conditions = ["deleted = 0"]
         params = []
         if author_id is not None:
             conditions.append("author_id = ?")
             params.append(author_id)
+        if question_id is not None:
+            conditions.append("COALESCE(question_id, '') = ?")
+            params.append(question_id)
         if query:
             # instr treats %, _, quotes and backslashes literally; values never become SQL.
             fields = ("title", "author_name", "text")
@@ -119,8 +152,15 @@ class SQLiteSourceRepository:
             params.extend([query] * (len(fields) + 1))
         return (" WHERE " + " AND ".join(conditions) if conditions else ""), params
 
-    def search(self, author_id: str | None, query: str, offset: int, limit: int) -> SourcePage:
-        where, params = self._filter(author_id, query)
+    def search(
+        self,
+        author_id: str | None,
+        query: str,
+        offset: int,
+        limit: int,
+        question_id: str | None = None,
+    ) -> SourcePage:
+        where, params = self._filter(author_id, query, question_id)
         with self._connection() as connection:
             # Explicit read transaction keeps count and items in one WAL snapshot.
             connection.execute("BEGIN")
@@ -137,3 +177,46 @@ class SQLiteSourceRepository:
             limit=limit,
             has_more=offset + len(items) < total,
         )
+
+    def groups(self, by: str, query: str, offset: int, limit: int) -> SourceGroupPage:
+        if by not in {"author", "question"}:
+            raise ValueError("Unknown grouping")
+        key = "author_id" if by == "author" else "COALESCE(question_id, '')"
+        name = (
+            "MIN(json_extract(payload, '$.author_name'))"
+            if by == "author"
+            else (
+                "CASE WHEN question_id IS NULL THEN '未关联问题' ELSE MIN(json_extract(payload, '$.title')) END"
+            )
+        )
+        grouped = f"SELECT {key} AS key, {name} AS name, COUNT(*) AS count FROM sources WHERE deleted = 0 GROUP BY {key}"
+        filtered = f"SELECT * FROM ({grouped}) WHERE instr(lower(name), lower(?)) > 0 OR instr(lower(key), lower(?)) > 0"
+        with self._connection() as connection:
+            connection.execute("BEGIN")
+            total = connection.execute(
+                f"SELECT COUNT(*) FROM ({filtered})", (query, query)
+            ).fetchone()[0]
+            rows = connection.execute(
+                filtered + " ORDER BY name, key LIMIT ? OFFSET ?", (query, query, limit, offset)
+            ).fetchall()
+        return SourceGroupPage(
+            items=[SourceGroup(key=r[0], name=r[1], count=r[2]) for r in rows],
+            total=total,
+            offset=offset,
+            limit=limit,
+            has_more=offset + len(rows) < total,
+        )
+
+    def delete_many(self, source_ids: list[str]) -> list[str]:
+        # Tombstones exclude sources from all new reads/retrieval; existing run artifacts stay intact.
+        source_ids = list(dict.fromkeys(source_ids))
+        placeholders = ",".join("?" for _ in source_ids)
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                f"SELECT id FROM sources WHERE deleted = 0 AND id IN ({placeholders})", source_ids
+            ).fetchall()
+            connection.execute(
+                f"UPDATE sources SET deleted = 1 WHERE id IN ({placeholders})", source_ids
+            )
+        return [row[0] for row in rows]

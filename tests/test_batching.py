@@ -278,9 +278,9 @@ def test_cards_reject_evidence_that_only_occurs_in_another_batch():
     with model_mock(responder=responder) as (generator, calls):
         with pytest.raises(DomainError) as error:
             CardService(SimpleNamespace(get=lambda _: source), generator).generate(
-                CardRequest(source_id=source.id)
+                CardRequest(source_id=source.id, count=1)
             )
-    assert error.value.code == "model_invalid_response" and len(calls) == 2
+    assert error.value.code == "cards_evidence_invalid" and len(calls) == 2
 
 
 def test_graph_rejects_valid_global_evidence_missing_from_current_batch():

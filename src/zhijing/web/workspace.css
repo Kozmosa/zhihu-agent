@@ -321,3 +321,16 @@ body[data-desktop=true] .tabs { position: sticky; top: 0; z-index: 5; background
   .two, .card-grid { grid-template-columns: 1fr; gap: 0; }.memory-card + .memory-card { margin-top: 12px; }.search-form { flex-wrap: nowrap; }.question-prompts { gap: 5px; }.question-prompts button { font-size: 9px; }.graph-scroll { max-width: 100%; }footer > span:last-child { display: none; }
   body[data-desktop=true] { height: auto; overflow: auto; }body[data-desktop=true] .shell { height: auto; }body[data-desktop=true] main { height: auto; overflow: visible; padding-top: 17px; }body[data-desktop=true] .intro { margin-top: 0; }body[data-desktop=true] .tabs { position: static; }
 }
+/* Library grouping and explicit selection for deletion. */
+.library-source-row {display:flex;gap:9px;align-items:center;min-width:0}
+.library-source-row > input {flex:0 0 auto;width:16px;height:16px;margin:0}
+.library-source-row .source-item {flex:1;min-width:0}
+.library-source-row strong,.library-group strong,.library-group small {overflow-wrap:anywhere}
+.library-selection {display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap}
+.library-selection label {display:flex;gap:6px;align-items:center;font-size:12px;margin:0}
+.library-selection input {width:16px;height:16px;margin:0}
+.library-selection .danger {color:#a12b32;border-color:#dfb7ba;font-size:12px}
+.library-group-heading {margin:8px 0}
+#library-view {width:100%}
+#library-search-form {margin-top:10px}
+.library-selection[hidden] {display:none}

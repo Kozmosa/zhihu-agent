@@ -92,6 +92,9 @@ class DesktopService:
                 "model_timeout": "模型响应超时，请稍后重试；本次请求没有自动重发。",
                 "model_unavailable": "模型服务不可用，请打开模型设置检查连接或切换离线模式。",
                 "model_invalid_response": "模型未返回有效结果，请核对模型设置后重试。",
+                "model_output_truncated": "模型达到输出上限。请减少生成数量，或在模型设置中提高最大输出 Token。",
+                "cards_format_invalid": "卡片格式或字段长度不符。请先试生成 1～3 张，或换用支持 JSON 输出的模型。",
+                "cards_evidence_invalid": "卡片证据无法在资料原文中找到，请重试或换用其他模型。",
                 "model_input_too_large": "当前资料超过模型输入限制，请选择较短的资料。",
                 "model_context_exceeded": "当前资料超过模型上下文限制，请检查模型设置。",
                 "invalid_config_token": "页面会话已更新，请重新连接本地服务后再试。",
@@ -132,6 +135,16 @@ class DesktopService:
         info = schema.get("info", {}) if isinstance(schema, dict) else {}
         if not isinstance(info, dict) or info.get("title") != "知境 ZhiJing Agent":
             raise DesktopServiceError("该端口被其他服务占用，请选择空闲端口；原服务未被修改。")
+        required = {
+            "/api/v1/sources/groups",
+            "/api/v1/sources/delete",
+            "/api/v1/zhihu/questions/jobs",
+        }
+        paths = schema.get("paths", {})
+        if not isinstance(paths, dict) or not required.issubset(paths):
+            raise DesktopServiceError(
+                "当前端口运行的是旧版知境，缺少资料管理或作者读取组件。请先处理待导入资料并退出旧服务，再启动新版；原服务未被修改。"
+            )
 
     def _port_is_occupied(self) -> bool:
         try:

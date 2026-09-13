@@ -10,8 +10,7 @@ import uuid
 from pathlib import Path
 
 from zhijing.features.zhihu.question_models import (
-    normalize_question_url,
-    question_id_from_url,
+    collection_target,
     raw_answer_to_draft,
 )
 
@@ -40,7 +39,7 @@ def _read_request(job_dir: Path) -> dict:
     request = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(request, dict):
         raise ValueError("Invalid request")
-    request["url"] = normalize_question_url(request.get("url"))
+    request["url"] = collection_target(request.get("url"))["url"]
     if type(request.get("count")) is not int or not 1 <= request["count"] <= 20:
         raise ValueError("Invalid count")
     if type(request.get("parent_pid")) is not int or not 0 < request["parent_pid"] < 2**32:
@@ -121,7 +120,7 @@ class QuestionReadSession:
                     continue
                 item = {
                     "answer_id": answer_id,
-                    "question_id": question_id_from_url(self.request["url"]),
+                    "question_id": raw["question_id"],
                     "title": draft.title,
                     "author_name": draft.author_name,
                     "author_url": raw.get("author_url", ""),
@@ -199,9 +198,7 @@ def run_question_browser(job_dir: Path) -> int:
         )
         script = script.replace(
             "__ZHIHU_READER_REQUEST__",
-            json.dumps(
-                {"question_id": question_id_from_url(request["url"]), "count": request["count"]}
-            ),
+            json.dumps({**collection_target(request["url"]), "count": request["count"]}),
         )
         started = time.monotonic()
 
@@ -228,7 +225,7 @@ def run_question_browser(job_dir: Path) -> int:
                 "读取",
                 [
                     MenuAction("登录知乎", lambda: navigate("https://www.zhihu.com/signin")),
-                    MenuAction("回到问题", lambda: navigate(request["url"])),
+                    MenuAction("回到读取页面", lambda: navigate(request["url"])),
                     MenuAction("完成读取", lambda: finish("ready")),
                     MenuAction("取消", lambda: finish("cancelled")),
                 ],

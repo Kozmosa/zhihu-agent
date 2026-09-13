@@ -24,6 +24,12 @@
   const body = make('div', undefined, 'qi-body');
   body.append(make('p', '打开独立知乎窗口，读取页面已显示的回答正文。先预览，再保存到本机；不保证覆盖问题全部回答或每条回答的完整正文。', 'qi-intro'));
   const form = id(make('form', undefined, 'qi-form'), 'question-import-form');
+  const modeLabel = make('label', '读取范围'); modeLabel.htmlFor = 'question-import-mode';
+  const mode = id(make('select'), 'question-import-mode');
+  for (const [value, label] of [['question', '按问题：读取多位答主'], ['author', '按作者：读取多个问题的回答']]) {
+    const option = make('option', label); option.value = value; mode.append(option);
+  }
+  mode.value = 'question'; form.append(modeLabel, mode);
   const urlLabel = make('label', '知乎问题链接'); urlLabel.htmlFor = 'question-import-url';
   const url = id(make('input'), 'question-import-url');
   url.type = 'url'; url.required = true; url.maxLength = 2048; url.placeholder = 'https://www.zhihu.com/question/…';
@@ -58,7 +64,7 @@
   function selected() { return state.rows.filter(row => row.checkbox.checked && !row.imported); }
   function controls() {
     const locked = state.starting || state.saving || state.cancelling;
-    start.disabled = locked || active(); url.disabled = count.disabled = locked || active();
+    start.disabled = locked || active(); url.disabled = count.disabled = mode.disabled = locked || active();
     cancel.hidden = !active(); cancel.disabled = locked || !active();
     refresh.hidden = !state.job; refresh.disabled = locked || state.polling || !state.job;
     const remaining = state.rows.filter(row => !row.imported);
@@ -130,7 +136,7 @@
     state.job = {...job, terminal: job.terminal === true || ['ready', 'failed', 'cancelled'].includes(job.status)};
     showItems(job.items);
     total.textContent = state.rows.length ? '回答预览 · ' + state.rows.length + ' 篇' : '回答预览';
-    const labels = {running: '正在读取知乎问题…', needs_login: '请在知乎窗口登录或完成验证，回到问题后继续读取。',
+    const labels = {running: '正在读取知乎回答…', needs_login: '请在知乎窗口登录或完成验证，回到读取页面后继续。',
       ready: '读取结束，请勾选需要保存的回答。', failed: '读取未能完成。已读取到的回答仍可预览并导入。', cancelled: '读取已停止。已读取到的回答仍可预览并导入。'};
     message(labels[job.status] + (typeof job.message === 'string' && job.message ? '\n' + job.message.slice(0, 1000) : '') +
       (state.rows.length ? '\n已读取 ' + state.rows.length + ' 篇，目标最多 ' + job.requested_count + ' 篇。' : ''), job.status === 'failed');
@@ -169,9 +175,11 @@
     try {
       target = new URL(url.value.trim());
       if (target.protocol !== 'https:' || !['www.zhihu.com', 'zhihu.com'].includes(target.hostname) || target.username || target.password
-          || (target.port && target.port !== '443') || !/^\/question\/\d+\/?$/.test(target.pathname)) throw new Error();
+          || (target.port && target.port !== '443') || !(mode.value === 'author'
+            ? /^\/(people|org)\/[A-Za-z0-9][A-Za-z0-9_-]{0,127}(?:\/answers)?\/?$/
+            : /^\/question\/\d+\/?$/).test(target.pathname)) throw new Error();
       if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) throw new Error();
-    } catch { message('请填写 https://www.zhihu.com/question/数字 形式的问题链接，数量为 1～20 篇。', true); return; }
+    } catch { message(mode.value === 'author' ? '请填写 https://www.zhihu.com/people/作者标识 形式的主页链接，数量为 1～20 篇。' : '请填写 https://www.zhihu.com/question/数字 形式的问题链接，数量为 1～20 篇。', true); return; }
     clearPolling(); state.revision++; const revision = state.revision;
     state.starting = true; state.job = null; state.rows = []; state.signature = ''; results.replaceChildren(); total.textContent = '回答预览';
     message('正在打开独立知乎读取窗口…'); controls();
@@ -203,6 +211,14 @@
     finally { state.saving = false; controls(); }
   });
   all.addEventListener('change', () => { for (const row of state.rows) if (!row.imported) row.checkbox.checked = all.checked; controls(); });
+  function modeLabels() {
+    const author = mode.value === 'author';
+    document.getElementById('question-import-title').textContent = author ? '读作者 · 导入多篇回答' : '导入知乎问题';
+    urlLabel.textContent = author ? '知乎作者主页链接' : '知乎问题链接';
+    url.placeholder = author ? 'https://www.zhihu.com/people/…' : 'https://www.zhihu.com/question/…';
+    reading.textContent = '在打开的知乎窗口登录或完成验证；回到' + (author ? '作者回答列表' : '问题页') + '后继续读取。只读取页面实际加载的回答，不保证全部历史回答覆盖。';
+  }
+  mode.addEventListener('change', () => { url.value = ''; modeLabels(); });
   refresh.addEventListener('click', () => { if (state.timer !== null) clearTimeout(state.timer); state.timer = null; return poll(); });
   close.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => { clearPolling(); controls(); state.opener?.focus(); });
@@ -210,6 +226,11 @@
   window.addEventListener('pageshow', () => schedule(0));
   document.querySelectorAll('[data-open-question-import]').forEach(opener => opener.addEventListener('click', () => {
     state.opener = opener;
+    if (!active() && !state.starting && !state.saving && !state.cancelling) {
+      const requested = opener.dataset?.readerMode || 'question';
+      if (mode.value !== requested) url.value = '';
+      mode.value = requested; modeLabels();
+    }
     if (!dialog.open) dialog.showModal();
     controls(); if (active()) schedule(0); else url.focus();
   }));

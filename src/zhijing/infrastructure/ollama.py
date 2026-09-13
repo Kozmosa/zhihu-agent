@@ -54,6 +54,11 @@ class OllamaGenerator:
             output_format=None if output_format == "prompt" else output_format,
         )
         try:
+            # A response schema may define candidate-level validation (cards).
+            # Other capabilities retain strict whole-response validation.
+            decoder = getattr(response_model, "parse_model_response", None)
+            if decoder is not None:
+                return decoder(text)
             return response_model.model_validate_json(text, strict=True)
         except ValidationError as exc:
             raise DomainError(

@@ -18,11 +18,16 @@
 <aside class="library" aria-label="资料库">
   <div class="library-section-label">我的知识库</div><div class="library-actions"><button id="open-zhihu" type="button" class="primary"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>搜索知乎</button><button id="open-import" type="button"><span class="plus" aria-hidden="true">＋</span>导入资料</button></div>
   <button id="workspace-question-import" type="button" class="qi-entry" data-open-question-import>导入知乎问题 · 读取多篇回答</button>
+  <button id="workspace-author-import" type="button" class="qi-entry" data-open-question-import data-reader-mode="author">读作者 · 导入作者的多篇回答</button>
   <details id="library-drawer" class="library-drawer" open><summary>我的资料<span class="drawer-hint">查看资料库</span></summary><div class="library-content">
   <div class="library-title"><p class="muted small">收藏你的阅读与思考</p><button id="reload-sources" type="button" class="quiet">刷新</button></div>
+  <label for="library-view">管理方式</label><select id="library-view"><option value="all">全部回答与资料</option><option value="author">按作者管理</option><option value="question">按问题管理</option></select>
+  <form id="library-search-form"><label for="library-search">搜索资料或分组</label><div class="inline"><input id="library-search" maxlength="200" placeholder="问题、作者或正文"><button type="submit">搜索</button></div></form>
+  <div class="library-group-heading"><button id="library-back" type="button" class="quiet" hidden>返回分组</button><p id="library-scope" class="muted small"></p></div>
   <details class="library-filter"><summary>按作者标识筛选</summary><form id="source-filter-form"><label for="source-filter">作者标识</label><div class="inline"><input id="source-filter" placeholder="留空查看全部" maxlength="200"><button type="submit">筛选</button></div></form></details>
   <div id="library-status" class="status" role="status" aria-live="polite"></div>
   <div id="source-list" class="source-list"></div>
+  <div id="library-selection" class="library-selection"><label><input id="library-select-page" type="checkbox"> 勾选本页</label><button id="library-delete" type="button" class="danger" disabled>删除选中</button></div>
   <div class="pager"><button id="prev-page" type="button">上一页</button><span id="page-number">第 1 页</span><button id="next-page" type="button">下一页</button></div>
   </div></details>
   <p class="library-footnote"><span aria-hidden="true">✦</span> 每一次理解，都有出处</p>
@@ -44,7 +49,7 @@
     <div class="panel-title"><h2 id="import-heading">导入阅读资料</h2><button id="close-import" type="button" class="quiet">收起</button></div>
     <p class="muted">粘贴正文保存到本地资料库。填写来源链接不会自动抓取网页。</p>
     <form id="import-form">
-      <label for="import-title">标题</label><input id="import-title" required maxlength="200" placeholder="这篇资料的标题">
+      <label for="import-title">问题（或文章标题）</label><input id="import-title" required maxlength="200" placeholder="这篇回答讨论的是什么问题？">
       <label for="import-author-name">作者名称</label><input id="import-author-name" required maxlength="200" placeholder="这篇资料由谁创作">
       <details class="advanced-author"><summary>关联同一作者的资料（可选）</summary><label for="import-author-id">作者标识</label><input id="import-author-id" maxlength="200" placeholder="确认是同一作者时，填写相同标识"><p class="muted small">留空时单独保存作者身份，避免将同名作者混为一人。</p></details>
       <label for="import-text">资料正文</label><textarea id="import-text" required maxlength="100000" rows="8" placeholder="粘贴原文（最多 100,000 字符）"></textarea>

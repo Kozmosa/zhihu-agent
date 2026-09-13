@@ -1,9 +1,10 @@
 """Ollama HTTP boundary: no silent fallback, retry, or provider error disclosure."""
 
 import httpx
-from .transcript_context import get_context
 
 from zhijing.core.errors import DomainError
+
+from .transcript_context import get_context
 
 
 def system_prompt(instructions: str) -> str:
@@ -35,12 +36,30 @@ class OllamaTransport:
         endpoint = "generate" if base_path.endswith("/api") else "api/generate"
         ctx = get_context()
         if ctx:
-            ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="request", provider="ollama", model=self.model, payload={"prompt": prompt, "instructions": instructions})
+            ctx.transcript.append(
+                session_id=ctx.session_id,
+                run_id=ctx.run_id,
+                step_id=ctx.step_id,
+                attempt=ctx.attempt,
+                event="request",
+                provider="ollama",
+                model=self.model,
+                payload={"prompt": prompt, "instructions": instructions},
+            )
         try:
             response = self.client.post(endpoint, json=body)
             response.raise_for_status()
             if ctx:
-                ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="response", provider="ollama", model=self.model, payload={"response": response.text})
+                ctx.transcript.append(
+                    session_id=ctx.session_id,
+                    run_id=ctx.run_id,
+                    step_id=ctx.step_id,
+                    attempt=ctx.attempt,
+                    event="response",
+                    provider="ollama",
+                    model=self.model,
+                    payload={"response": response.text},
+                )
         except httpx.TimeoutException as exc:
             raise DomainError(
                 "model_timeout", "模型调用超时，请检查模型服务或调整超时配置。", 502
@@ -51,13 +70,19 @@ class OllamaTransport:
             ) from exc
         try:
             envelope = response.json()
-            text = envelope["response"]
-            if not isinstance(text, str) or not text.strip() or len(text) > 256_000:
-                raise ValueError("Invalid response text")
-            if envelope.get("done") is False or envelope.get("done_reason") in {
+            if isinstance(envelope, dict) and envelope.get("done_reason") in {
                 "length",
                 "max_tokens",
             }:
+                raise DomainError(
+                    "model_output_truncated",
+                    "模型达到输出上限，未完成生成。请减少生成数量，或在模型设置中提高最大输出 Token。",
+                    502,
+                )
+            text = envelope["response"]
+            if not isinstance(text, str) or not text.strip() or len(text) > 256_000:
+                raise ValueError("Invalid response text")
+            if envelope.get("done") is False:
                 raise ValueError("Incomplete generation")
         except (ValueError, KeyError, TypeError, AttributeError) as exc:
             raise DomainError(

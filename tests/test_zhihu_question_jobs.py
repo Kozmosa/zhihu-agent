@@ -15,6 +15,8 @@ from zhijing.core.errors import DomainError
 from zhijing.features.zhihu import question_jobs
 from zhijing.features.zhihu.question_jobs import QuestionJobs
 from zhijing.features.zhihu.question_models import (
+    collection_target,
+    normalize_author_url,
     normalize_question_url,
     question_id_from_url,
     raw_answer_to_draft,
@@ -23,6 +25,60 @@ from zhijing.infrastructure.sqlite_sources import SQLiteSourceRepository
 
 QUESTION = "https://www.zhihu.com/question/123456"
 CANARY = "synthetic-secret-must-not-appear-in-errors"
+
+
+@pytest.mark.parametrize("suffix", ["", "/", "/answers", "/answers/?utm_source=test"])
+def test_author_profile_normalization(suffix):
+    assert (
+        normalize_author_url("https://www.zhihu.com/people/example-author" + suffix)
+        == "https://www.zhihu.com/people/example-author/answers"
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.example/people/a",
+        "https://www.zhihu.com/people/a/followers",
+        "https://user:secret@www.zhihu.com/people/a",
+        "https://www.zhihu.com:444/people/a",
+    ],
+)
+def test_author_target_rejects_unsupported_or_unsafe_urls(url):
+    with pytest.raises(ValueError):
+        collection_target(url)
+
+
+def test_author_collection_accepts_cross_question_answers_but_rejects_other_or_unknown_authors(
+    jobs,
+):
+    manager, processes, _ = jobs
+    view = manager.start("https://www.zhihu.com/people/example-author", 10)
+    assert view["mode"] == "author"
+    first = answer()
+    other_question = answer(
+        "900",
+        question_id="456",
+        url="https://www.zhihu.com/question/456/answer/900",
+        title="另一个问题？",
+    )
+    write_result(
+        manager,
+        view["id"],
+        "ready",
+        [
+            first,
+            other_question,
+            answer("901", author_url="https://www.zhihu.com/people/same-nickname"),
+            answer("902", author_url=""),
+        ],
+    )
+    processes[0].returncode = 0
+    result = manager.status(view["id"])
+    assert result["collected_count"] == 2
+    assert {item["title"] for item in result["items"]} == {first["title"], "另一个问题？"}
+    assert {item["author_id"] for item in result["items"]} == {"zhihu-author:people:example-author"}
+    assert "跳过" in result["message"]
 
 
 def answer(answer_id="789", **updates):

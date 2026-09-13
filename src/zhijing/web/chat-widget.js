@@ -255,6 +255,18 @@
     $('chat-source-prev').addEventListener('click', () => loadSources(Math.max(0, state.page - 1)));
     $('chat-source-next').addEventListener('click', () => { if (state.more) return loadSources(state.page + 1); });
     document.addEventListener('zhijing:source-selected', event => chooseSource(event.detail, false));
+    document.addEventListener('zhijing:sources-deleted', event => {
+      const ids = event.detail?.source_ids || [];
+      state.sources = state.sources.filter(source => !ids.includes(source.id));
+      if (state.selected && ids.includes(state.selected.id)) {
+        state.selected = null; state.revision++; state.selectionVersion++; state.loadingSelection = false;
+        state.messageCount = 0; $('chat-messages').replaceChildren($('chat-empty'));
+        $('chat-question').value = '';
+        try { globalThis.sessionStorage.removeItem(storageKey); } catch { /* Optional. */ }
+        status('chat-status', '所选资料已删除，请重新选择。');
+      }
+      renderSources(); updateContext();
+    });
 
     updateContext();
     renderSources();

@@ -22,13 +22,14 @@
       <details id="companion-import">
         <summary>＋ 粘贴资料</summary>
         <form id="companion-import-form" class="import-form">
-          <div class="import-fields"><label>标题（可选）<input id="companion-import-title" maxlength="200" placeholder="留空则从正文取标题"></label><label>作者（可选）<input id="companion-import-name" maxlength="200" placeholder="未署名"></label></div>
+          <div class="import-fields"><label>问题 / 标题（可选）<input id="companion-import-title" maxlength="200" placeholder="这段回答讨论什么问题？"></label><label>作者（可选）<input id="companion-import-name" maxlength="200" placeholder="未署名"></label></div>
           <label for="companion-import-text">正文</label><textarea id="companion-import-text" required maxlength="100000" rows="4" placeholder="粘贴你想阅读的内容…"></textarea>
           <div class="import-actions"><span>保存在本机资料库</span><button id="companion-import-submit" type="submit" class="primary">保存并选用</button></div>
           <p id="companion-import-status" class="status" role="status" aria-live="polite"></p>
         </form>
       </details>
       <button id="companion-question-import" type="button" class="qi-entry" data-open-question-import>导入知乎问题</button>
+      <button id="companion-author-import" type="button" class="qi-entry" data-open-question-import data-reader-mode="author">读作者</button>
       <details class="source-pages"><summary>更多资料</summary><div class="pager"><button id="companion-source-prev" type="button" aria-label="上一页资料">上一页</button><span id="companion-source-page">第 1 页</span><button id="companion-source-next" type="button" aria-label="下一页资料">下一页</button></div></details>
     </div>
     <p id="companion-status" class="status" role="status" aria-live="polite"></p>

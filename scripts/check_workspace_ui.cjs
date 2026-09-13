@@ -121,7 +121,7 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
     inFlight++;
     try {
     if (delays.has(url)) await delays.get(url);
-    if (failures.has(url)) return {ok: false, json: async () => ({error: {message: failures.get(url)}})};
+    if (failures.has(url)) return {ok: false, json: async () => ({error: typeof failures.get(url) === 'string' ? {message: failures.get(url)} : failures.get(url)})};
     if (fixtures.has(url)) return {ok: true, json: async () => fixtures.get(url)};
     return await fetch(new URL(url, base), options);
     } finally { inFlight--; }
@@ -182,6 +182,44 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   await click('empty-import');
   assert.equal(get('import-panel').hidden, false);
   assert.equal(get('zhihu-panel').hidden, true);
+  // Group and deletion checks use only this harness's synthetic HTTP database.
+  const libraryDrafts = [
+    {title: '管理测试问题', author_id: 'library-a', author_name: '管理同名作者', text: '甲回答', origin: 'zhihu', url: 'https://www.zhihu.com/question/88001/answer/99001'},
+    {title: '管理测试问题', author_id: 'library-b', author_name: '管理同名作者', text: '乙回答', origin: 'zhihu', url: 'https://www.zhihu.com/question/88001/answer/99002'},
+    {title: '管理测试问题', author_id: 'library-a', author_name: '管理同名作者', text: '另一问题', origin: 'zhihu', url: 'https://www.zhihu.com/question/88002/answer/99003'},
+  ];
+  sandbox.libraryDrafts = libraryDrafts;
+  await vm.runInContext('saveSources(libraryDrafts)', sandbox); await idle();
+  get('library-view').value = 'author'; await get('library-view').events.change(); await idle();
+  get('library-search').value = '管理同名'; await submit('library-search-form');
+  assert.equal(get('source-list').children.length, 2, 'Same display name must remain separate authors');
+  await get('source-list').children[0].click(); await idle();
+  assert.equal(vm.runInContext('state.sources.length', sandbox), 2);
+  get('library-view').value = 'question'; await get('library-view').events.change(); await idle();
+  get('library-search').value = '88001'; await submit('library-search-form');
+  assert.equal(get('source-list').children.length, 1);
+  await get('source-list').children[0].click(); await idle();
+  assert.equal(vm.runInContext('state.sources.length', sandbox), 2, 'Question group includes multiple authors');
+  await get('source-list').children[0].children[1].click(); await idle();
+  get('library-select-page').checked = true; get('library-select-page').events.change();
+  let confirmed = false;
+  sandbox.window = {confirm: text => { assert.match(text, /2 条资料/); assert.match(text, /历史任务/); return confirmed; }};
+  const deletesBefore = requests.filter(row => row.url === '/api/v1/sources/delete').length;
+  await click('library-delete');
+  assert.equal(requests.filter(row => row.url === '/api/v1/sources/delete').length, deletesBefore, 'Cancel must send no delete request');
+  failures.set('/api/v1/sources/delete', '模拟删除失败'); confirmed = true;
+  await click('library-delete');
+  assert.equal(vm.runInContext('state.sources.length', sandbox), 2, 'Failure must preserve the displayed sources');
+  failures.delete('/api/v1/sources/delete');
+  await click('library-delete');
+  assert.equal(vm.runInContext('state.selected', sandbox), null);
+  assert.equal(get('run-reading').disabled, true);
+  assert.equal(get('export-apkg').disabled, true);
+  assert.equal(get('chat-send').disabled, true);
+  assert.equal(get('selected-text').textContent, '');
+  assert.equal(vm.runInContext('state.sources.length', sandbox), 0);
+  await click('library-back');
+  assert.doesNotMatch(allText(get('source-list')), /88001/);
   assert.equal(get('import-title').focused, true);
   await click('empty-search');
   assert.equal(get('zhihu-panel').hidden, false);
@@ -420,6 +458,19 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   await submit('cards-form');
   assert.match(get('cards-status').className, /error/);
   assert.equal(get('export-apkg').disabled, true);
+  failures.clear();
+  for (const [code, expected] of [
+    ['model_output_truncated', /模型达到输出上限/],
+    ['cards_format_invalid', /卡片格式或字段长度/],
+    ['cards_evidence_invalid', /证据无法在资料原文中找到/],
+  ]) {
+    failures.set('/api/v1/cards/generate', {code, message: 'private-provider-details'});
+    await submit('cards-form');
+    assert.match(get('cards-status').textContent, expected);
+    assert(!get('cards-status').textContent.includes('private-provider-details'));
+    assert.equal(get('export-apkg').disabled, true);
+    assert.equal(get('export-tsv').disabled, true);
+  }
   failures.clear();
   const batches = Array.from({length: 20}, (_, i) => ({title: 'Page ' + i, author_id: 'pagination', author_name: 'Paging', text: 'Page body ' + i}));
   get('import-file').files = [{size: 1000, text: async () => JSON.stringify({items: batches})}];

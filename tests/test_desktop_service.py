@@ -71,7 +71,9 @@ def test_owned_service_roundtrip_reuse_shutdown_and_durable_data(tmp_path, monke
 
 
 @contextmanager
-def fixture_server(*, title="知境 ZhiJing Agent", post_status=200, post_body=None, redirect=False):
+def fixture_server(
+    *, title="知境 ZhiJing Agent", post_status=200, post_body=None, redirect=False, old=False
+):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -89,7 +91,19 @@ def fixture_server(*, title="知境 ZhiJing Agent", post_status=200, post_body=N
                     200, {"status": "ok", "version": "0.2.0", "model_provider": "extractive"}
                 )
             elif self.path == "/openapi.json":
-                self.respond(200, {"info": {"title": title}})
+                paths = (
+                    {}
+                    if old
+                    else {
+                        key: {}
+                        for key in [
+                            "/api/v1/sources/groups",
+                            "/api/v1/sources/delete",
+                            "/api/v1/zhihu/questions/jobs",
+                        ]
+                    }
+                )
+                self.respond(200, {"info": {"title": title}, "paths": paths})
             elif self.path == "/workspace":
                 if redirect:
                     self.send_response(302)
@@ -146,6 +160,16 @@ def test_refuses_occupied_port_with_another_application(tmp_path):
                 assert client.get(service.base_url + "/health").status_code == 200
         finally:
             service.shutdown()
+
+
+def test_old_service_is_preserved_and_not_reused_for_new_library(tmp_path):
+    with fixture_server(old=True) as (port, requests):
+        service = DesktopService(tmp_path, port=port, data_dir=tmp_path / "data")
+        with pytest.raises(DesktopServiceError, match="旧版知境"):
+            service.ensure_running()
+        assert not requests and not (tmp_path / "data").exists()
+        assert service.get_health()["status"] == "ok"
+        service.shutdown()
 
 
 def test_data_directory_priority_remains_explicit_then_environment_then_project(
