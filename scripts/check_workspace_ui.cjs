@@ -14,6 +14,10 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   assert(html.indexOf('/assets/knowledge-map.js') < html.indexOf('/assets/workspace.js'));
   assert.match(html, /src="\/assets\/knowledge-map.js" nonce="[^"]+"/);
   assert(html.includes('/assets/knowledge-map.css'));
+  assert(html.includes('生成思维导图'));
+  assert(html.indexOf('/assets/opinion-flow.js') < html.indexOf('/assets/opinion-map.js'));
+  assert(html.indexOf('/assets/opinion-map.js') < html.indexOf('/assets/workspace.js'));
+  const opinionMounts = [];
   const nodes = new Map();
   const created = [];
   class Element {
@@ -107,6 +111,10 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
     querySelectorAll: selector => created.filter(node => selector === 'button' ? node.tagName === 'button' : node.className.split(' ').includes(selector.slice(1))),
   };
   const sandbox = {document, sessionStorage, CustomEvent: class { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } }, location: {hash: '#cards'}, URL: LocalURL, URLSearchParams, setTimeout: fn => fn(),
+    ZhijingOpinionMap: {mount(root, options) {
+      const record = {root, options, active: false}; opinionMounts.push(record);
+      return {setActive: active => { record.active = active; }};
+    }},
     // Rendering is tested by the shared component's own browser QA. Keep this
     // host test focused on real requests, full response handoff and lifecycle.
     ZhijingKnowledgeMap: {render(root, result, options) {
@@ -148,6 +156,12 @@ if (!base) throw new Error('Pass an isolated test server URL, never a user data 
   const chatMessages = () => get('chat-messages').children.filter(node => node.className.startsWith('chat-message '));
   await idle();
   assert.equal(get('pane-cards').hidden, false, 'A direct capability link must open the requested tab');
+  assert.equal(opinionMounts.length, 1);
+  await click('tab-opinions');
+  assert.equal(opinionMounts[0].active, true);
+  assert.equal(get('pane-opinions').hidden, false);
+  await click('tab-cards');
+  assert.equal(opinionMounts[0].active, false);
   assert.equal(get('pane-reading').hidden, true);
   assert.equal(get('run-reading').disabled, true);
   assert.equal(get('export-apkg').disabled, true);

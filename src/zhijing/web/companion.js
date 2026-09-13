@@ -4,12 +4,28 @@
   const token = document.currentScript.dataset.configToken;
   const $ = id => document.getElementById(id);
   const tools = ['reading', 'author', 'cards', 'facts', 'knowledge'];
+  const tabs = ['reading', 'author', 'cards', 'facts', 'opinions', 'knowledge'];
   const storageKey = 'zhijing.companion.source.' + token;
   const pageSize = 20;
   const state = {selected: null, revision: 0, sources: [], page: 0, more: false,
     loading: false, choosing: false, importing: false, pending: {}, cards: [], cardIndex: 0,
     revealed: false, exporting: false, nextSourcePage: null};
   let mapCleanup = null, mapRevision = 0;
+  let opinionOpenRevision = 0;
+  const opinionPanel = globalThis.ZhijingOpinionMap?.mount($('companion-opinions'), {
+    token, compact: true,
+    onOpenSource: async id => {
+      const revision = ++opinionOpenRevision;
+      const source = await request('/api/v1/sources/' + encodeURIComponent(id));
+      if (revision !== opinionOpenRevision || $('tool-pane-opinions').hidden) return;
+      choose(source); tab('reading');
+    },
+    onOpenQuestionImport: value => {
+      $('companion-question-import').click();
+      const input = $('question-import-url');
+      if (input && !input.disabled) { input.value = value; input.focus(); }
+    },
+  });
 
   function clearMap() {
     mapRevision += 1;
@@ -70,7 +86,9 @@
   }
 
   function tab(name, focus = false) {
-    for (const tool of tools) {
+    opinionOpenRevision++;
+    opinionPanel?.setActive(name === 'opinions');
+    for (const tool of tabs) {
       const active = tool === name;
       $('tool-tab-' + tool).setAttribute('aria-selected', String(active));
       $('tool-tab-' + tool).tabIndex = active ? 0 : -1;
@@ -389,14 +407,14 @@
     status('tool-status-knowledge', '范围已调整，请重新发现联系。');
   });
 
-  for (const tool of tools) {
+  for (const tool of tabs) {
     $('tool-tab-' + tool).addEventListener('click', () => tab(tool));
     $('tool-tab-' + tool).addEventListener('keydown', event => {
-      const index = tools.indexOf(tool);
-      const destination = {ArrowRight: (index + 1) % tools.length, ArrowLeft: (index + tools.length - 1) % tools.length, Home: 0, End: tools.length - 1}[event.key];
-      if (destination !== undefined) { event.preventDefault(); tab(tools[destination], true); }
+      const index = tabs.indexOf(tool);
+      const destination = {ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1}[event.key];
+      if (destination !== undefined) { event.preventDefault(); tab(tabs[destination], true); }
     });
-    $('tool-form-' + tool).addEventListener('submit', event => { event.preventDefault(); return run(tool); });
+    if (tools.includes(tool)) $('tool-form-' + tool).addEventListener('submit', event => { event.preventDefault(); return run(tool); });
   }
   $('companion-source').addEventListener('change', async () => {
     const id = $('companion-source').value;

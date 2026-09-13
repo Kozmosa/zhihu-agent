@@ -3,11 +3,25 @@ import os
 
 import pytest
 
+from zhijing.core import credentials
 from zhijing.core.config import Settings
 
 
 @pytest.fixture
 def local(tmp_path, monkeypatch):
+    # All platforms exercise protected storage without requiring a Windows account.
+    records = {}
+
+    class TestProtector:
+        def protect(self, value):
+            token = os.urandom(32)
+            records[token] = value
+            return token
+
+        def unprotect(self, value):
+            return records[value]
+
+    monkeypatch.setattr(credentials, "default_protector", TestProtector)
     for key in list(os.environ):
         if (
             key.startswith(("ZHIJING_OPENAI_", "ZHIJING_OLLAMA_"))

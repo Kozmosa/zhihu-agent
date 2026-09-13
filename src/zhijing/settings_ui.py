@@ -1,4 +1,4 @@
-"""Local configuration API. Credentials are transient and never included in responses."""
+"""Local configuration API with opt-in encrypted persistence and no key disclosure."""
 
 import secrets
 from dataclasses import replace
@@ -11,7 +11,13 @@ from pydantic import Field, SecretStr, ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from zhijing.container import build_container
-from zhijing.core.config import Settings
+from zhijing.core.config import Settings, model_profile
+from zhijing.core.credentials import (
+    CredentialStorageError,
+    migrate_legacy_model_profile,
+    persistence_supported,
+    save_model_profile,
+)
 from zhijing.core.errors import DomainError
 from zhijing.domain.models import Schema
 from zhijing.runtime import Runtime
@@ -30,10 +36,13 @@ class ModelConfiguration(Schema):
     context_window: int = Field(default=32768, ge=2048, le=262144)
     max_input_chars: int = Field(default=120000, ge=1000, le=1000000)
     thinking: Literal["auto", "enabled", "disabled"] = "auto"
+    persist: bool = False
 
     def settings(self, initial: Settings) -> Settings:
         # Clear both previous provider credentials when replacing a configuration.
-        initial = replace(initial, ollama_api_key="", openai_api_key="")
+        initial = replace(
+            initial, ollama_api_key="", openai_api_key="", model_config_persistence="session_only"
+        )
         if self.provider == "extractive":
             return replace(initial, model_provider="extractive")
         prefix = self.provider
@@ -132,6 +141,10 @@ def workspace_asset(filename: str):
         "question-import.css",
         "knowledge-map.js",
         "knowledge-map.css",
+        "opinion-map.js",
+        "opinion-map.css",
+        "opinion-flow.js",
+        "opinion-flow.css",
     }:
         raise DomainError("asset_not_found", "未找到页面资源。", 404)
     return FileResponse(
@@ -162,7 +175,8 @@ def configuration_status(request: Request):
             if prefix == "ollama"
             else settings.openai_context_window,
             "max_input_chars": getattr(settings, f"{prefix}_max_input_chars"),
-            "persistence": "session_only",
+            "persistence": settings.model_config_persistence,
+            "persistence_supported": persistence_supported(),
             "thinking": settings.openai_thinking if provider == "openai" else "auto",
         }
 
@@ -198,7 +212,19 @@ def configure(runtime: Runtime, config: ModelConfiguration, activate: bool):
                 response_model=ConnectionResult,
             )
         if activate:
-            runtime.activate(settings, candidate, expected_revision=revision)
+            with runtime.lock:
+                if runtime.revision != revision:
+                    raise DomainError(
+                        "configuration_changed", "另一操作已更新配置，请刷新页面后重试。", 409
+                    )
+                if config.persist:
+                    try:
+                        migrate_legacy_model_profile(settings.data_dir)
+                        save_model_profile(settings.data_dir, model_profile(settings))
+                    except CredentialStorageError as exc:
+                        raise DomainError("model_storage_failed", str(exc), 422) from None
+                    settings = replace(settings, model_config_persistence="encrypted_local")
+                runtime.activate(settings, candidate, expected_revision=revision)
     except Exception:
         candidate.close()
         raise
@@ -208,6 +234,9 @@ def configure(runtime: Runtime, config: ModelConfiguration, activate: bool):
         "status": "ok",
         "provider": config.provider,
         "activated": activate,
+        "persistence": settings.model_config_persistence
+        if activate
+        else runtime.settings.model_config_persistence,
         "message": "已启用离线模式。"
         if config.provider == "extractive"
         else (

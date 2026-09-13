@@ -11,6 +11,7 @@ from zhijing.features.cards.service import CardService
 from zhijing.features.companion.service import CompanionService
 from zhijing.features.facts.service import FactService
 from zhijing.features.knowledge.service import KnowledgeService
+from zhijing.features.opinions.service import OpinionService
 from zhijing.features.reader.service import ReaderService
 from zhijing.features.retrieval.service import LexicalRetriever
 from zhijing.features.runs.service import RunService
@@ -34,6 +35,7 @@ class Container:
     cards: CardService
     facts: FactService
     knowledge: KnowledgeService
+    opinions: OpinionService
     companion: CompanionService
     runs: RunService
     zhihu: ZhihuSearchService
@@ -56,7 +58,12 @@ def build_container(settings: Settings) -> Container:
     repository.initialize()
     run_repository = SQLiteRunRepository(settings.data_dir / "runs.sqlite3")
     run_repository.initialize()
-    transcript = SQLiteTranscript(settings.data_dir / "runs.sqlite3")
+    private_values = (
+        settings.openai_api_key,
+        settings.ollama_api_key,
+        settings.zhihu_access_secret,
+    )
+    transcript = SQLiteTranscript(settings.data_dir / "runs.sqlite3", secrets=private_values)
     transcript.initialize()
     client = None
     generator = ExtractiveGenerator()
@@ -80,6 +87,7 @@ def build_container(settings: Settings) -> Container:
             max_input_chars=settings.ollama_max_input_chars,
             num_predict=settings.ollama_num_predict,
             num_ctx=settings.ollama_num_ctx,
+            secret_values=private_values,
         )
         generator = structured
     elif settings.model_provider == "openai":
@@ -99,6 +107,7 @@ def build_container(settings: Settings) -> Container:
             num_predict=settings.openai_max_tokens,
             num_ctx=settings.openai_context_window,
             thinking=settings.openai_thinking,
+            secret_values=private_values,
         )
         generator = structured
     sources = SourceService(repository)
@@ -110,6 +119,7 @@ def build_container(settings: Settings) -> Container:
     )
     facts = FactService(repository, retriever, generator=structured)
     knowledge = KnowledgeService(repository, generator=structured)
+    opinions = OpinionService(repository, generator=structured)
     companion = CompanionService(sources, reader, cards, facts, author, knowledge)
     runs = RunService(
         run_repository,
@@ -130,6 +140,7 @@ def build_container(settings: Settings) -> Container:
         cards=cards,
         facts=facts,
         knowledge=knowledge,
+        opinions=opinions,
         companion=companion,
         runs=runs,
         zhihu=zhihu,

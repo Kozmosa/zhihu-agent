@@ -5,10 +5,26 @@ const $ = id => document.getElementById(id);
 const desktopPage = document.body.dataset?.desktop === 'true';
 const sourceStorageKey = 'zhijing.chat.source.' + token;
 const tasks = ['reading', 'author', 'cards', 'facts', 'knowledge'];
+const tabs = ['reading', 'author', 'cards', 'facts', 'opinions', 'knowledge'];
 const state = {selected: null, selectionRevision: 0, sources: [], page: 0, more: false, filter: '', busy: false, cards: [], mode: 'extractive', zhihuConfigured: false, zhihuResults: []};
 const pageSize = 20;
 const mobileLayout = globalThis.matchMedia?.('(max-width: 720px)');
 let mapCleanup = null, mapRevision = 0;
+let opinionOpenRevision = 0;
+const opinionPanel = globalThis.ZhijingOpinionMap?.mount($('workspace-opinions'), {
+  token,
+  onOpenSource: async id => {
+    const revision = ++opinionOpenRevision;
+    const source = await request('/api/v1/sources/' + encodeURIComponent(id));
+    if (revision !== opinionOpenRevision || $('pane-opinions').hidden) return;
+    select(source); tab('reading');
+  },
+  onOpenQuestionImport: value => {
+    $('workspace-question-import').click();
+    const input = $('question-import-url');
+    if (input && !input.disabled) { input.value = value; input.focus(); }
+  },
+});
 
 function clearMap() {
   mapRevision += 1;
@@ -64,7 +80,7 @@ function status(id, text, kind = '') {
 function controls() {
   const chatRoot = document.getElementById('chat-root');
   const questionImport = document.getElementById('question-import-dialog');
-  document.querySelectorAll('button').forEach(button => { if (!chatRoot?.contains(button) && !questionImport?.contains(button) && !button.closest('.knowledge-map')) button.disabled = state.busy; });
+  document.querySelectorAll('button').forEach(button => { if (!chatRoot?.contains(button) && !questionImport?.contains(button) && !button.closest('.knowledge-map') && !button.closest('.opinion-map')) button.disabled = state.busy; });
   document.querySelectorAll('.requires-source').forEach(button => { if (!button.closest('.knowledge-map')) button.disabled = state.busy || !state.selected; });
   $('prev-page').disabled = state.busy || state.page === 0;
   $('next-page').disabled = state.busy || !state.more;
@@ -159,7 +175,9 @@ async function restoreSelectedSource() {
 }
 
 function tab(name) {
-  for (const task of tasks) {
+  opinionOpenRevision++;
+  opinionPanel?.setActive(name === 'opinions');
+  for (const task of tabs) {
     const active = name === task;
     $('tab-' + task).setAttribute('aria-selected', String(active));
     $('tab-' + task).tabIndex = active ? 0 : -1;
@@ -448,14 +466,14 @@ async function exportCards(format) {
   });
 }
 
-for (const task of tasks) {
+for (const task of tabs) {
   $('tab-' + task).addEventListener('click', () => tab(task));
   $('tab-' + task).addEventListener('keydown', event => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const index = tasks.indexOf(task);
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tasks.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tasks.length) % tasks.length;
-    tab(tasks[next]); $('tab-' + tasks[next]).focus();
+    const index = tabs.indexOf(task);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    tab(tabs[next]); $('tab-' + tabs[next]).focus();
   });
 }
 $('open-import').addEventListener('click', openImportPanel);
@@ -525,7 +543,7 @@ $('facts-form').addEventListener('submit', event => { event.preventDefault(); re
 function resetMapScope() {
   clearMap();
   $('knowledge-result').replaceChildren();
-  status('knowledge-status', '范围已调整，请重新生成知识地图。');
+  status('knowledge-status', '范围已调整，请重新生成思维导图。');
 }
 $('graph-scope').addEventListener('change', resetMapScope);
 $('graph-limit').addEventListener('input', resetMapScope);
@@ -548,7 +566,7 @@ document.addEventListener('zhijing:sources-imported', async event => {
   try { await loadSources(0, ''); status('library-status', '已导入 ' + saved.length + ' 篇回答，并选中第一篇。', 'success'); }
   catch { status('library-status', '回答已保存并选中，资料列表暂未刷新；可稍后点击刷新。', 'error'); }
 });
-if (tasks.includes(requestedTask)) tab(requestedTask);
+if (tabs.includes(requestedTask)) tab(requestedTask);
 syncLibraryDrawer();
 mobileLayout?.addEventListener?.('change', syncLibraryDrawer);
 job('library-status', '正在读取资料库…', async () => { await refreshMode(); await loadSources(); await restoreSelectedSource(); });

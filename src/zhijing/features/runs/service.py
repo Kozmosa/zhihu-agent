@@ -13,7 +13,7 @@ from zhijing.features.companion.service import CompanionService
 from zhijing.features.runs.ports import RunRepository
 from zhijing.features.runs.schemas import RunError, RunRecord, RunRequest, RunStep
 from zhijing.features.runs.snapshot import SourceSnapshot
-from zhijing.infrastructure.transcript_context import TranscriptContext, set_context, reset_context
+from zhijing.infrastructure.transcript_context import TranscriptContext, reset_context, set_context
 
 
 def _now() -> str:
@@ -183,7 +183,8 @@ class RunService:
                 try:
                     result = companion.execute(run.request, task)
                 finally:
-                    if token: reset_context(token)
+                    if token:
+                        reset_context(token)
                 checkpoint()
 
                 def complete_step(current, task=task, result=result):

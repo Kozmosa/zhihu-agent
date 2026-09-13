@@ -1,11 +1,13 @@
 """Chat Completions transport with the existing strict evidence validation."""
 
 import httpx
-from .transcript_context import get_context
 
 from zhijing.core.errors import DomainError
+from zhijing.core.redaction import client_redactor
 from zhijing.infrastructure.ollama import OllamaGenerator
 from zhijing.infrastructure.ollama_transport import system_prompt
+
+from .transcript_context import get_context
 
 
 class OpenAICompatibleTransport:
@@ -16,14 +18,17 @@ class OpenAICompatibleTransport:
         num_predict: int,
         num_ctx: int,
         thinking: str = "auto",
+        secret_values=(),
     ):
         if thinking not in {"auto", "enabled", "disabled"}:
             raise ValueError("thinking must be auto, enabled, or disabled")
         self.client, self.model = client, model
         self.num_predict, self.num_ctx = num_predict, num_ctx
         self.thinking = thinking
+        self.redactor = client_redactor(client, secret_values)
 
     def request(self, *, prompt: str, instructions: str, output_format: dict | str | None) -> str:
+        prompt, instructions = self.redactor.text(prompt), self.redactor.text(instructions)
         body = {
             "model": self.model,
             "stream": False,
@@ -39,16 +44,23 @@ class OpenAICompatibleTransport:
             body["thinking"] = {"type": self.thinking}
         ctx = get_context()
         if ctx:
-            ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="request", provider="openai", model=self.model, payload={"prompt": prompt, "instructions": instructions})
+            ctx.transcript.append(
+                session_id=ctx.session_id,
+                run_id=ctx.run_id,
+                step_id=ctx.step_id,
+                attempt=ctx.attempt,
+                event="request",
+                provider="openai",
+                model=self.redactor.text(self.model),
+                payload={"prompt": prompt, "instructions": instructions},
+            )
         try:
-            response = self.client.post("chat/completions", json=body)
+            response = self.client.post("chat/completions", json=body, follow_redirects=False)
             response.raise_for_status()
-            if ctx:
-                ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="response", provider="openai", model=self.model, payload={"response": response.text})
-        except httpx.TimeoutException as exc:
+        except httpx.TimeoutException:
             raise DomainError(
                 "model_timeout", "模型调用超时，请检查服务或调整超时设置。", 502
-            ) from exc
+            ) from None
         except httpx.HTTPStatusError as exc:
             messages = {
                 401: "API 鉴权失败，请检查密钥。",
@@ -62,22 +74,35 @@ class OpenAICompatibleTransport:
                     exc.response.status_code, "模型服务拒绝请求，请检查模型名、输出格式和参数支持。"
                 ),
                 502,
-            ) from exc
-        except httpx.HTTPError as exc:
+            ) from None
+        except httpx.HTTPError:
             raise DomainError(
                 "model_unavailable", "无法连接模型服务，请检查地址及网络。", 502
-            ) from exc
+            ) from None
         try:
             choice = response.json()["choices"][0]
             text = choice["message"]["content"]
+            if self.redactor.contains(response.text) or self.redactor.contains(str(text)):
+                raise ValueError("Credential in model response")
             if choice.get("finish_reason") != "stop":
                 raise ValueError("Generation incomplete or refused")
             if not isinstance(text, str) or not text.strip() or len(text) > 256_000:
                 raise ValueError("Invalid response text")
-        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             raise DomainError(
                 "model_invalid_response", "模型响应缺失、超限、被拒绝或未完成生成。", 502
-            ) from exc
+            ) from None
+        if ctx:
+            ctx.transcript.append(
+                session_id=ctx.session_id,
+                run_id=ctx.run_id,
+                step_id=ctx.step_id,
+                attempt=ctx.attempt,
+                event="response",
+                provider="openai",
+                model=self.redactor.text(self.model),
+                payload={"response": text},
+            )
         return text
 
 
@@ -87,5 +112,10 @@ class OpenAICompatibleGenerator(OllamaGenerator):
     def __init__(self, client: httpx.Client, model: str, *, thinking: str = "auto", **kwargs):
         super().__init__(client, model, **kwargs)
         self.transport = OpenAICompatibleTransport(
-            client, model, kwargs.get("num_predict", 4096), kwargs.get("num_ctx", 32768), thinking
+            client,
+            model,
+            kwargs.get("num_predict", 4096),
+            kwargs.get("num_ctx", 32768),
+            thinking,
+            kwargs.get("secret_values", ()),
         )

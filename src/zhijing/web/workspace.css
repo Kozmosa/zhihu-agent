@@ -226,7 +226,8 @@ main { padding: 24px 27px 12px; max-width: 1440px; }
 .workspace-grid { gap: 16px; grid-template-columns: minmax(0,1fr) !important; }
 .workspace-grid > .reading-workspace { position: static !important; }
 .reading-workspace { border-color: #e5eaf4; box-shadow: 0 5px 25px #314d8e04; border-radius: 18px; overflow: hidden; }
-.tabs { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); padding: 10px; gap: 5px; overflow: visible; border-bottom: 1px solid var(--line); }
+.tabs { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); padding: 10px; gap: 5px; overflow: visible; border-bottom: 1px solid var(--line); }
+#reading-workspace:has(#pane-opinions:not([hidden]))>.selection,#reading-workspace:has(#pane-opinions:not([hidden]))>#model-notice{display:none}
 .tabs button { display: flex; align-items: center; justify-content: flex-start; gap: 9px; min-width: 0; min-height: 70px; padding: 10px; border: 1px solid transparent; border-radius: 11px; color: #67758f; white-space: normal; }
 .tabs button:hover { background: #f7f9fd; }
 .tabs button[aria-selected=true] { color: var(--blue); background: #f0f4ff; border-color: #e4ebff; }

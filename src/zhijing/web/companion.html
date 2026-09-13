@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="/assets/companion.css">
   <link rel="stylesheet" href="/assets/question-import.css">
   <link rel="stylesheet" href="/assets/knowledge-map.css">
+  <link rel="stylesheet" href="/assets/opinion-map.css">
+  <link rel="stylesheet" href="/assets/opinion-flow.css">
 </head>
 <body data-desktop="__DESKTOP__" data-surface="companion">
 <div id="companion-root">
@@ -34,12 +36,13 @@
     <p id="companion-status" class="status" role="status" aria-live="polite"></p>
   </section>
 
-  <nav class="tool-switcher" role="tablist" aria-label="五项功能">
+  <nav class="tool-switcher" role="tablist" aria-label="阅读与知识功能">
     <button id="tool-tab-reading" class="tool-tab" data-tool="reading" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-reading" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v5h4M9 12h6M9 16h5"/></svg><span>长文拆解</span></button>
     <button id="tool-tab-author" class="tool-tab" data-tool="author" type="button" role="tab" aria-selected="true" aria-controls="tool-pane-author"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 1-8 8H5l-3 3V11a9 9 0 0 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg><span>答主问答</span></button>
     <button id="tool-tab-cards" class="tool-tab" data-tool="cards" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-cards" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="14" rx="3"/><path d="M7 3h10M8 12h8M8 16h5"/></svg><span>记忆卡片</span></button>
     <button id="tool-tab-facts" class="tool-tab" data-tool="facts" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-facts" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg><span>事实审查</span></button>
-    <button id="tool-tab-knowledge" class="tool-tab" data-tool="knowledge" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-knowledge" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="m10.5 7.5-4 8M13.5 7.5l4 8M8 18h8"/></svg><span>知识地图</span></button>
+    <button id="tool-tab-opinions" class="tool-tab" data-tool="opinions" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-opinions" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="m10.5 7.5-4 8M13.5 7.5l4 8"/></svg><span>知识地图</span></button>
+    <button id="tool-tab-knowledge" class="tool-tab" data-tool="knowledge" type="button" role="tab" aria-selected="false" aria-controls="tool-pane-knowledge" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M12 12V4h6M12 12v8h6"/><circle cx="4" cy="12" r="2"/></svg><span>思维导图</span></button>
   </nav>
 
   <main class="tool-area">
@@ -64,14 +67,17 @@
       <form id="tool-form-facts" class="composer"><label class="sr-only" for="tool-claims">待审查的主张，每行一条，最多五条</label><textarea id="tool-claims" required maxlength="10000" rows="3" placeholder="输入想核对的主张，每行一条…"></textarea><div class="composer-actions"><span>最多 5 条 · 仅对照本机资料</span><button id="tool-run-facts" type="submit" class="primary" disabled>核对主张</button></div><p id="tool-status-facts" class="status" role="status" aria-live="polite"></p></form>
     </section>
     <section id="tool-pane-knowledge" class="tool-pane" role="tabpanel" aria-labelledby="tool-tab-knowledge" hidden>
-      <div class="tool-heading"><h1>发现知识之间的联系</h1><p>选择资料范围，探索联系并对照原文。</p></div>
+      <div class="tool-heading"><h1>思维导图 · 发现概念联系</h1><p>选择资料范围，探索联系并对照原文。</p></div>
       <div id="tool-result-knowledge" class="tool-result" role="region" aria-label="知识关系"></div>
       <form id="tool-form-knowledge" class="composer action-only"><div class="knowledge-controls"><label>资料范围<select id="tool-knowledge-scope"><option value="author">当前作者</option><option value="all">全部资料</option></select></label><label>最多篇数<select id="tool-knowledge-limit"><option value="10">10 篇</option><option value="20" selected>20 篇</option><option value="50">50 篇</option><option value="100">100 篇</option></select></label></div><div class="composer-actions"><span>点开关系查看依据</span><button id="tool-run-knowledge" type="submit" class="primary" disabled>发现联系</button></div><p id="tool-status-knowledge" class="status" role="status" aria-live="polite"></p></form>
     </section>
+    <section id="tool-pane-opinions" class="tool-pane" role="tabpanel" aria-labelledby="tool-tab-opinions" hidden><div id="companion-opinions"></div></section>
   </main>
   <footer class="companion-footer"><span class="presence-dot" aria-hidden="true"></span>你的阅读，随时继续<span class="footer-separator">·</span>关闭窗口即可收起</footer>
 </div>
 <script src="/assets/knowledge-map.js" nonce="__CONFIG_TOKEN__"></script>
+<script src="/assets/opinion-flow.js" nonce="__CONFIG_TOKEN__"></script>
+<script src="/assets/opinion-map.js" nonce="__CONFIG_TOKEN__"></script>
 <script src="/assets/companion.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
 <script src="/assets/question-import.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
 </body>

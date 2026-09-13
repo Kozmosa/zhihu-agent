@@ -1,6 +1,7 @@
 from contextvars import ContextVar
 from dataclasses import dataclass
 
+
 @dataclass
 class TranscriptContext:
     transcript: object

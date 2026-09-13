@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="/assets/workspace.css">
   <link rel="stylesheet" href="/assets/question-import.css">
   <link rel="stylesheet" href="/assets/knowledge-map.css">
+  <link rel="stylesheet" href="/assets/opinion-map.css">
+  <link rel="stylesheet" href="/assets/opinion-flow.css">
 </head>
 <body data-desktop="__DESKTOP__">
 <a class="skip" href="#main">跳到工作区</a>
@@ -60,7 +62,8 @@
     <button id="tab-author" role="tab" aria-selected="false" aria-controls="pane-author" tabindex="-1" data-tab="author"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 1-8 8H6l-4 3V11a9 9 0 0 1 18 0Z"/><path d="M7 11h.01M11 11h.01M15 11h.01"/></svg></span><span class="tab-copy">答主问答<small>带着问题深入</small></span></button>
     <button id="tab-cards" role="tab" aria-selected="false" aria-controls="pane-cards" tabindex="-1" data-tab="cards"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="14" rx="3"/><path d="M7 3h10M8 12h8M8 16h5"/></svg></span><span class="tab-copy">记忆卡片<small>把理解记下来</small></span></button>
     <button id="tab-facts" role="tab" aria-selected="false" aria-controls="pane-facts" tabindex="-1" data-tab="facts"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg></span><span class="tab-copy">事实审查<small>让结论有依据</small></span></button>
-    <button id="tab-knowledge" role="tab" aria-selected="false" aria-controls="pane-knowledge" tabindex="-1" data-tab="knowledge"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="m10.5 8-4 7M13.5 8l4 7M8 18h8"/></svg></span><span class="tab-copy">知识地图<small>看见知识联系</small></span></button>
+    <button id="tab-opinions" role="tab" aria-selected="false" aria-controls="pane-opinions" tabindex="-1" data-tab="opinions"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="m10.5 8-4 7M13.5 8l4 7"/></svg></span><span class="tab-copy">知识地图<small>比较作者观点</small></span></button>
+    <button id="tab-knowledge" role="tab" aria-selected="false" aria-controls="pane-knowledge" tabindex="-1" data-tab="knowledge"><span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M12 12V4h6M12 12v8h6"/><circle cx="4" cy="12" r="2"/></svg></span><span class="tab-copy">思维导图<small>看见概念联系</small></span></button>
   </div>
   <section class="selection" aria-labelledby="selected-title"><div class="eyebrow"><span class="selection-dot"></span>正在阅读</div><h2 id="selected-title">选择一份资料开始</h2><p id="selected-meta">从我的资料中选择，或添加一份新资料。</p><p id="selected-extent" hidden></p><details id="source-preview" hidden><summary id="source-preview-label">查看已导入内容</summary><div id="selected-text" class="original"></div><a id="selected-url" target="_blank" rel="noopener noreferrer" hidden>查看来源网页 ↗</a></details></section>
 
@@ -93,14 +96,17 @@
     <div id="facts-status" class="status" role="status" aria-live="polite"></div><div id="facts-result" class="results"></div>
   </section>
   <section id="pane-knowledge" role="tabpanel" aria-labelledby="tab-knowledge" class="panel" hidden>
-    <h2>看见知识之间的联系</h2><p class="muted">从资料出发，探索主题、文章与概念之间的联系。</p>
-    <form id="knowledge-form"><div class="two"><div><label for="graph-scope">资料范围</label><select id="graph-scope"><option value="all">全部已导入资料</option><option value="author">当前作者的资料</option></select></div><div><label for="graph-limit">最多使用多少篇资料</label><input id="graph-limit" type="number" min="1" max="500" value="20" required></div></div><div class="actions"><button id="run-knowledge" class="primary" type="submit">生成知识地图</button></div></form>
+    <h2>思维导图 · 看见概念之间的联系</h2><p class="muted">从资料出发，探索主题、文章与概念之间的联系。</p>
+    <form id="knowledge-form"><div class="two"><div><label for="graph-scope">资料范围</label><select id="graph-scope"><option value="all">全部已导入资料</option><option value="author">当前作者的资料</option></select></div><div><label for="graph-limit">最多使用多少篇资料</label><input id="graph-limit" type="number" min="1" max="500" value="20" required></div></div><div class="actions"><button id="run-knowledge" class="primary" type="submit">生成思维导图</button></div></form>
     <div id="knowledge-status" class="status" role="status" aria-live="polite"></div><div id="knowledge-result" class="results"></div>
   </section>
+  <section id="pane-opinions" role="tabpanel" aria-labelledby="tab-opinions" class="panel" hidden><div id="workspace-opinions"></div></section>
   </div></div>
   <footer><span>知境 <span class="footer-dot">·</span> 陪你把知识变成自己的</span><span>有依据，也有新的思考</span></footer>
 </main></div>
 <script src="/assets/knowledge-map.js" nonce="__CONFIG_TOKEN__"></script>
+<script src="/assets/opinion-flow.js" nonce="__CONFIG_TOKEN__"></script>
+<script src="/assets/opinion-map.js" nonce="__CONFIG_TOKEN__"></script>
 <script src="/assets/workspace.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>
 <script src="/assets/workspace-shell.js" nonce="__CONFIG_TOKEN__"></script>
 <script src="/assets/question-import.js" nonce="__CONFIG_TOKEN__" data-config-token="__CONFIG_TOKEN__"></script>

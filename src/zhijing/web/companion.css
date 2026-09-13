@@ -8,3 +8,5 @@
 
 .tool-result .card-actions{position:sticky;bottom:0;z-index:1;background:#fff;padding:8px 0;margin-bottom:0;border-top:1px solid #eef1f8}.tool-result blockquote{margin:8px 0;padding:0}.tool-result .citation{white-space:normal}
 @media(max-height:560px){.source-context{max-height:30dvh}.source-note .prose{max-height:80px}}
+.tool-switcher{grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;padding-left:8px;padding-right:8px}#companion-opinions{min-height:0;flex:1}.tool-tab{font-size:10px}
+#companion-root:has(#tool-pane-opinions:not([hidden])){grid-template-rows:56px 73px minmax(0,1fr) 28px}#companion-root:has(#tool-pane-opinions:not([hidden]))>.source-context{display:none}

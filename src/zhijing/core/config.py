@@ -1,6 +1,6 @@
 """配置只在创建应用时读取，导入模块不会创建数据库或连接网络。"""
 
-import json
+import ipaddress
 import math
 import os
 from dataclasses import dataclass, field
@@ -8,11 +8,14 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import urlsplit
 
+from zhijing.core.credentials import load_model_profile
+
 
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
     model_provider: str = "extractive"
+    model_config_persistence: str = "session_only"
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3:8b"
     ollama_api_key: str = field(default="", repr=False)
@@ -36,6 +39,13 @@ class Settings:
 
     def validation_errors(self) -> list[str]:
         errors = []
+        # Also catch an accidental paste into fields that are returned by the status API.
+        if any(
+            secret and secret in public
+            for secret in (self.openai_api_key, self.ollama_api_key, self.zhihu_access_secret)
+            for public in (self.openai_url, self.openai_model, self.ollama_url, self.ollama_model)
+        ):
+            errors.append("API 密钥不能出现在模型地址或模型名称中。")
         if len(self.zhihu_access_secret) > 4096 or any(
             not 33 <= ord(character) <= 126 for character in self.zhihu_access_secret
         ):
@@ -92,6 +102,13 @@ class Settings:
             errors.append(
                 "ZHIJING_OLLAMA_URL must be an HTTP(S) base URL without credentials, query or fragment."
             )
+        elif self.ollama_api_key and url.scheme != "https":
+            try:
+                local = ipaddress.ip_address(url.hostname).is_loopback
+            except ValueError:
+                local = url.hostname.lower() == "localhost"
+            if not local:
+                errors.append("ZHIJING_OLLAMA_URL must use HTTPS when sending an API key remotely.")
         if not math.isfinite(self.ollama_timeout) or not 1 <= self.ollama_timeout <= 1800:
             errors.append("ZHIJING_OLLAMA_TIMEOUT must be between 1 and 1800 seconds.")
         if not 1000 <= self.ollama_max_input_chars <= 1000000:
@@ -105,20 +122,23 @@ class Settings:
             errors.append(
                 "ZHIJING_OLLAMA_NUM_CTX must be 2048..262144 and exceed NUM_PREDICT plus 512."
             )
-        if any(not 32 <= ord(c) <= 126 for c in self.ollama_api_key):
+        if len(self.ollama_api_key) > 4096 or any(
+            not 33 <= ord(c) <= 126 for c in self.ollama_api_key
+        ):
             errors.append("ZHIJING_OLLAMA_API_KEY must contain only printable ASCII characters.")
         return errors
 
     @classmethod
     def from_env(cls) -> "Settings":
         data_dir = Path(os.getenv("ZHIJING_DATA_DIR", "E:/CzCode/codex/state/zhijing"))
-        local = _local_model_config(data_dir / "model-config.json")
         # An explicit process model configuration replaces the entire saved profile.
         # This avoids sending a saved credential to an overridden endpoint.
         override = any(
             k == "ZHIJING_MODEL_PROVIDER" or k.startswith(("ZHIJING_OPENAI_", "ZHIJING_OLLAMA_"))
             for k in os.environ
         )
+        # Process overrides never decrypt or send a saved credential to another endpoint.
+        local = {} if override else load_model_profile(data_dir)
 
         def get(name, default):
             return os.environ.get(name, default if override else local.get(name, default))
@@ -134,6 +154,9 @@ class Settings:
             zhihu_access_secret=get("ZHIHU_ACCESS_SECRET", "").strip(),
             zhihu_timeout=number("ZHIHU_SEARCH_TIMEOUT", "20", float),
             model_provider=get("ZHIJING_MODEL_PROVIDER", "extractive"),
+            model_config_persistence=(
+                "environment" if override else "encrypted_local" if local else "session_only"
+            ),
             ollama_url=get("ZHIJING_OLLAMA_URL", "http://127.0.0.1:11434"),
             ollama_model=get("ZHIJING_OLLAMA_MODEL", "qwen3:8b"),
             ollama_api_key=get("ZHIJING_OLLAMA_API_KEY", ""),
@@ -157,35 +180,19 @@ class Settings:
 def _number(name: str, default: str, converter):
     try:
         return converter(os.getenv(name, default))
-    except ValueError as exc:
-        raise ValueError(f"{name} must be a valid number.") from exc
+    except ValueError:
+        raise ValueError(f"{name} must be a valid number.") from None
 
 
-def _local_model_config(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-    try:
-        if path.stat().st_size > 16384:
-            raise ValueError()
-        value = json.loads(path.read_text(encoding="utf-8-sig"))
-        allowed = {
-            "ZHIJING_MODEL_PROVIDER",
-            "ZHIJING_OPENAI_URL",
-            "ZHIJING_OPENAI_MODEL",
-            "ZHIJING_OPENAI_API_KEY",
-            "ZHIJING_OPENAI_TIMEOUT",
-            "ZHIJING_OPENAI_FORMAT",
-            "ZHIJING_OPENAI_MAX_TOKENS",
-            "ZHIJING_OPENAI_CONTEXT_WINDOW",
-            "ZHIJING_OPENAI_MAX_INPUT_CHARS",
-            "ZHIJING_OPENAI_THINKING",
-        }
-        if not isinstance(value, dict) or any(
-            k not in allowed or not isinstance(v, str) for k, v in value.items()
-        ):
-            raise ValueError()
-        return value
-    except (ValueError, OSError):
-        raise ValueError(
-            "Local model-config.json is invalid or unreadable; check its JSON string fields."
-        ) from None
+def model_profile(settings: Settings) -> dict[str, str]:
+    """Serialize only the active provider, never previous credentials or unrelated secrets."""
+    from zhijing.core.credentials import ALLOWED_FIELDS
+
+    profile = {"ZHIJING_MODEL_PROVIDER": settings.model_provider}
+    if settings.model_provider == "extractive":
+        return profile
+    prefix = "ZHIJING_" + settings.model_provider.upper() + "_"
+    for key in ALLOWED_FIELDS:
+        if key.startswith(prefix):
+            profile[key] = str(getattr(settings, key.removeprefix("ZHIJING_").lower()))
+    return profile

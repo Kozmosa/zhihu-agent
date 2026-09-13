@@ -39,7 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="知境 ZhiJing Agent",
         version=__version__,
         lifespan=lifespan,
-        description="本地知识助手 Server。五项能力支持 Ollama 和 OpenAI 兼容 API，默认离线摘录；companion/run 同步组合，runs 提供运行历史、部分结果及恢复。",
+        description="本地知识助手 Server。保留阅读、问答、卡片、审查和思维导图；知识地图围绕问题比较不同回答的观点，需启用模型。",
     )
 
     @app.exception_handler(DomainError)
@@ -53,10 +53,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     @app.middleware("http")
-    async def no_cache_settings(request: Request, call_next):
+    async def protect_local_api(request: Request, call_next):
+        # Browsers must not use a third-party page to invoke the user's local API.
+        # Local scripts have no Origin/Fetch Metadata and remain supported.
+        is_api = request.url.path.startswith("/api/")
+        origin = request.headers.get("origin")
+        if is_api and (
+            (origin is not None and origin != str(request.base_url).rstrip("/"))
+            or request.headers.get("sec-fetch-site") == "cross-site"
+        ):
+            return JSONResponse(
+                status_code=403,
+                content={"error": {"code": "invalid_origin", "message": "请从本机知境页面操作。"}},
+                headers={"Cache-Control": "no-store"},
+            )
         response = await call_next(request)
-        if request.url.path.startswith("/api/v1/settings/"):
+        if is_api:
             response.headers["Cache-Control"] = "no-store"
+            response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 
     @app.get("/health", tags=["运行状态"])

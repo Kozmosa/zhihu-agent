@@ -29,3 +29,7 @@ src/_review/
 
 # Machine-local model credentials
 model-config.json
+model-config.dpapi.json
+.model-config-*.tmp
+
+node_modules/
