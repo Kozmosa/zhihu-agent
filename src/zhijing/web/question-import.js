@@ -80,7 +80,7 @@
     let response;
     try {
       response = await fetch(path, {method: data === undefined ? 'GET' : 'POST', cache: 'no-store', signal,
-        headers: data === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+        headers: data === undefined ? {'X-Zhijing-Token': token} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
         body: data === undefined ? undefined : JSON.stringify(data)});
     } catch (error) {
       if (error.name === 'AbortError') throw error;

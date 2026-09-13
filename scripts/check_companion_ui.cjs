@@ -8,7 +8,8 @@ const html = fs.readFileSync(path.join(root, 'src/zhijing/web/companion.html'), 
 const script = fs.readFileSync(path.join(root, 'src/zhijing/web/companion.js'), 'utf8');
 const toolNames = ['reading', 'author', 'cards', 'facts', 'knowledge'];
 const token = 'synthetic-companion-session';
-const storageKey = 'zhijing.companion.source.' + token;
+const sessionId = 'synthetic-public-session-id';
+const storageKey = 'zhijing.companion.source.' + sessionId;
 const cases = [];
 const copy = value => JSON.parse(JSON.stringify(value));
 
@@ -41,7 +42,7 @@ function environment({savedId, storageFails = false} = {}) {
     click() { if (this.tagName === 'a') downloads.push({href: this.href, name: this.download}); return this.events.click?.(); }
     set innerHTML(_) { throw new Error('Source text must never become HTML'); }
   }
-  for (const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
+  for (const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\sid="([^"]+)"[^>]*)>/g)) {
     const item = new Element(match[1]); item.id = match[3];
     item.hidden = /\bhidden\b/.test(match[2]); item.open = /\bopen\b/.test(match[2]);
   }
@@ -52,7 +53,7 @@ function environment({savedId, storageFails = false} = {}) {
   }
   const body = new Element('body');
   const documentListeners = new Map();
-  const document = {body, currentScript: {dataset: {configToken: token}},
+  const document = {body, currentScript: {dataset: {configToken: token, sessionId}},
     addEventListener: (name, listener) => { if (!documentListeners.has(name)) documentListeners.set(name, []); documentListeners.get(name).push(listener); },
     dispatchEvent: event => Promise.all((documentListeners.get(event.type) || []).map(listener => listener(event))),
     getElementById: id => nodes.get(id) || null, createElement: tag => new Element(tag)};
@@ -107,7 +108,7 @@ function environment({savedId, storageFails = false} = {}) {
       const url = new URL(relative, 'http://127.0.0.1');
       const body = options.body ? JSON.parse(options.body) : undefined;
       requests.push({path: url.pathname, relative, options, body});
-      if (body) assert.equal(options.headers['X-Zhijing-Token'], token);
+      assert.equal(options.headers['X-Zhijing-Token'], token);
       const gate = gates.get(url.pathname), failure = failures.get(url.pathname);
       gates.delete(url.pathname); failures.delete(url.pathname);
       inflight++;
@@ -134,7 +135,7 @@ function environment({savedId, storageFails = false} = {}) {
 (async () => {
   assert(!html.includes('/assets/workspace.js'), 'The companion must not load workspace handlers');
   assert(html.indexOf('/assets/knowledge-map.js') < html.indexOf('/assets/companion.js'));
-  assert.match(html, /src="\/assets\/knowledge-map.js" nonce="__CONFIG_TOKEN__"/);
+  assert.match(html, /src="\/assets\/knowledge-map.js" nonce="__CSP_NONCE__"/);
   assert(html.includes('/assets/knowledge-map.css'));
   const ui = environment(); await ui.idle();
   assert.equal(ui.get('tool-pane-author').hidden, false);

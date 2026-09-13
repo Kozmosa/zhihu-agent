@@ -19,7 +19,7 @@ def test_ollama_sends_only_supplied_evidence():
         answer = json.dumps({"answer": "根据资料[1]回答。", "citations": [1]})
         return httpx.Response(200, json={"response": answer, "done": True})
 
-    with httpx.Client(transport=httpx.MockTransport(handler), base_url="http://ollama") as client:
+    with httpx.Client(transport=httpx.MockTransport(handler), base_url="https://ollama") as client:
         result = OllamaGenerator(client, "test-model").answer(
             "问题",
             [
@@ -42,7 +42,7 @@ def test_ollama_sends_only_supplied_evidence():
 )
 def test_model_failures_are_explicit(status, payload):
     transport = httpx.MockTransport(lambda request: httpx.Response(status, json=payload))
-    with httpx.Client(transport=transport, base_url="http://ollama") as client:
+    with httpx.Client(transport=transport, base_url="https://ollama") as client:
         with pytest.raises(DomainError) as error:
             OllamaGenerator(client, "test-model").answer("问题", [])
     assert error.value.status == 502

@@ -13,7 +13,7 @@ class Output(Schema):
     count: int = Field(ge=1)
 
 
-@pytest.mark.parametrize("base", ["http://local", "http://local/api", "http://local/proxy/api"])
+@pytest.mark.parametrize("base", ["https://local", "https://local/api", "https://local/proxy/api"])
 @pytest.mark.parametrize("format_name", ["schema", "json", "prompt"])
 def test_structured_request_paths_formats_and_auth(base, format_name):
     requests = []
@@ -64,7 +64,7 @@ def test_structured_request_paths_formats_and_auth(base, format_name):
 )
 def test_invalid_or_truncated_responses_are_not_downgraded(envelope):
     with httpx.Client(
-        base_url="http://local",
+        base_url="https://local",
         transport=httpx.MockTransport(lambda _: httpx.Response(200, json=envelope)),
     ) as client:
         with pytest.raises(DomainError) as error:
@@ -77,7 +77,7 @@ def test_invalid_or_truncated_responses_are_not_downgraded(envelope):
 def test_input_budget_rejects_before_sending_or_truncating():
     calls = []
     with httpx.Client(
-        base_url="http://local",
+        base_url="https://local",
         transport=httpx.MockTransport(lambda request: calls.append(request)),
     ) as client:
         with pytest.raises(DomainError) as error:
@@ -97,7 +97,7 @@ def test_input_budget_rejects_before_sending_or_truncating():
 def test_budget_includes_system_text_and_conservative_token_reserve(instructions, payload, options):
     calls = []
     with httpx.Client(
-        base_url="http://local",
+        base_url="https://local",
         transport=httpx.MockTransport(lambda request: calls.append(request)),
     ) as client:
         with pytest.raises(DomainError) as error:
@@ -110,7 +110,7 @@ def test_budget_includes_system_text_and_conservative_token_reserve(instructions
 @pytest.mark.parametrize("status", [401, 403, 404, 429, 500])
 def test_upstream_errors_do_not_expose_provider_body(status):
     with httpx.Client(
-        base_url="http://local",
+        base_url="https://local",
         transport=httpx.MockTransport(
             lambda _: httpx.Response(status, text="secret-provider-details")
         ),
@@ -129,7 +129,7 @@ def test_timeout_is_explicit_and_not_retried():
         calls.append(request)
         raise httpx.ReadTimeout("private transport detail", request=request)
 
-    with httpx.Client(base_url="http://local", transport=httpx.MockTransport(timeout)) as client:
+    with httpx.Client(base_url="https://local", transport=httpx.MockTransport(timeout)) as client:
         with pytest.raises(DomainError) as error:
             OllamaGenerator(client, "test-model").generate(
                 task="test", instructions="", payload={}, response_model=Output
@@ -157,7 +157,7 @@ def test_author_rejects_untraceable_or_mismatched_references(answer, citations):
         )
     ]
     with httpx.Client(
-        base_url="http://local",
+        base_url="https://local",
         transport=httpx.MockTransport(lambda _: httpx.Response(200, json=envelope)),
     ) as client:
         with pytest.raises(DomainError) as error:

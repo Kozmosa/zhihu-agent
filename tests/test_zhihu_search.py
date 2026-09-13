@@ -276,7 +276,11 @@ def test_routes_reject_cross_origin_and_bad_session(zhihu_api, route, method):
 
 
 def test_all_routes_reject_nonlocal_client(tmp_path):
-    with TestClient(create_app(Settings(data_dir=tmp_path)), client=("192.0.2.1", 12345)) as client:
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("192.0.2.1", 12345),
+    ) as client:
         client.headers["X-Zhijing-Token"] = client.app.state.config_token
         for method, route in [("GET", "status"), ("POST", "config"), ("POST", "search")]:
             response = client.request(method, "/api/v1/zhihu/" + route, json={})

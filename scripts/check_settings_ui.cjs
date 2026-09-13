@@ -19,6 +19,7 @@ let failure = false;
 const requests = [];
 const state = () => ({provider: active, base_url: 'https://fixture.test/v1', model: 'fixture', has_api_key: active !== 'extractive', output_format: 'json', timeout: 120, max_tokens: 4096, context_window: 32768, max_input_chars: 120000});
 const sandbox = {document: {getElementById: id => {assert(nodes.has(id), `Missing element ${id}`); return nodes.get(id);}, querySelectorAll: () => [], createElement: () => new Element('')}, fetch: async (url, options) => {
+  if (url.startsWith('/api/v1/')) assert.equal(options.headers['X-Zhijing-Token'], '__CONFIG_TOKEN__', 'Settings API GET and POST must authenticate');
   requests.push({url, options});
   if (failure) return {ok: false, json: async () => ({error: {message: 'Connection failed'}})};
   let data;

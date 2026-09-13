@@ -4,7 +4,7 @@
   const token = document.currentScript.dataset.configToken;
   const $ = id => document.getElementById(id);
   const tools = ['reading', 'author', 'cards', 'facts', 'knowledge'];
-  const storageKey = 'zhijing.companion.source.' + token;
+  const storageKey = 'zhijing.companion.source.' + document.currentScript.dataset.sessionId;
   const pageSize = 20;
   const state = {selected: null, revision: 0, sources: [], page: 0, more: false,
     loading: false, choosing: false, importing: false, pending: {}, cards: [], cardIndex: 0,
@@ -40,7 +40,7 @@
     let response;
     try {
       response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
-        headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+        headers: body === undefined ? {'X-Zhijing-Token': token} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
         body: body === undefined ? undefined : JSON.stringify(body)});
     } catch { throw new Error('暂时无法连接知境，请稍后重试。'); }
     if (response.ok && binary) return response.blob();

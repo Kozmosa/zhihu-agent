@@ -1,5 +1,6 @@
 """The compact companion has its own page while the full workspace stays available."""
 
+import re
 from html.parser import HTMLParser
 
 from fastapi.testclient import TestClient
@@ -54,11 +55,12 @@ def test_desktop_page_exposes_five_capabilities_without_admin_credentials(tmp_pa
         assert "__CONFIG_TOKEN__" not in response.text
         assert "__CHAT_WIDGET__" not in response.text
         token = client.app.state.config_token
-        assert "nonce-" + token in response.headers["content-security-policy"]
+        nonce = re.search(r"nonce-([^']+)", response.headers["content-security-policy"])[1]
+        assert nonce != token
         assets = []
         for tag, attributes in page.elements:
             if tag == "script" and "src" in attributes:
-                assert attributes.get("nonce") == token
+                assert attributes.get("nonce") == nonce
                 assets.append(attributes["src"])
             if tag == "link" and attributes.get("rel") == "stylesheet":
                 assets.append(attributes["href"])
@@ -103,7 +105,9 @@ def test_desktop_page_keeps_local_origin_and_host_boundary(tmp_path):
             assert client.get(path, headers={"Origin": "https://outside.test"}).status_code == 403
             assert client.get(path, headers={"Host": "outside.test"}).status_code == 400
     with TestClient(
-        create_app(Settings(data_dir=tmp_path)), client=("192.0.2.20", 12345)
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("192.0.2.20", 12345),
     ) as client:
         for path in ("/desktop", "/assets/companion.js", "/assets/companion.css"):
             assert client.get(path).status_code == 403

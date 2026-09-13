@@ -2,7 +2,7 @@
   'use strict';
 
   const token = document.currentScript.dataset.configToken;
-  const storageKey = 'zhijing.chat.source.' + token;
+  const storageKey = 'zhijing.chat.source.' + document.currentScript.dataset.sessionId;
   const modes = {extractive: '原文摘录', ollama: '资料问答', openai: '资料问答'};
 
   function initialize() {
@@ -39,7 +39,7 @@
       let response;
       try {
         response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
-          headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+          headers: body === undefined ? {'X-Zhijing-Token': token} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
           body: body === undefined ? undefined : JSON.stringify(body)});
       } catch { throw new Error('无法连接本地服务，请确认服务仍在运行。'); }
       let data;

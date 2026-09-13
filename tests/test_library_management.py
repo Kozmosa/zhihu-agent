@@ -129,9 +129,16 @@ def test_migration_backfill_failure_rolls_back_schema_for_retry(tmp_path, monkey
 
 
 def test_library_routes_delete_requires_local_session_and_validates_input(tmp_path):
-    with TestClient(create_app(Settings(data_dir=tmp_path)), client=("127.0.0.1", 1234)) as client:
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("127.0.0.1", 1234),
+    ) as client:
+        token = re.search(r'data-config-token="([^"]+)"', client.get("/workspace").text)[1]
         saved = client.post(
-            "/api/v1/sources/import", json={"items": [draft().model_dump(mode="json")]}
+            "/api/v1/sources/import",
+            headers={"X-Zhijing-Token": token},
+            json={"items": [draft().model_dump(mode="json")]},
         ).json()[0]
         ids = {"source_ids": [saved["id"]]}
         assert client.post("/api/v1/sources/delete", json=ids).status_code == 403
@@ -151,6 +158,7 @@ def test_library_routes_delete_requires_local_session_and_validates_input(tmp_pa
             ).status_code
             == 422
         )
+        client.headers.update(headers)
         groups = client.get("/api/v1/sources/groups?by=question").json()
         assert groups["items"][0]["key"] == "123"
         assert client.get("/api/v1/sources?question_id=123").json()[0]["id"] == saved["id"]
