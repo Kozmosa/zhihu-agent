@@ -48,8 +48,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status_code=exc.status, content={"error": {"code": exc.code, "message": exc.message}}
         )
 
+    @app.middleware("http")
+    async def require_api_token(request: Request, call_next):
+        # Opt-in gate for non-local clients; local pages and the platform health check stay open.
+        if settings.api_token:
+            path = request.url.path
+            local_client = (
+                request.client is not None and request.client.host in {"127.0.0.1", "::1"}
+            )
+            protected = path.startswith("/api/v1/") and not path.startswith("/api/v1/settings/")
+            if protected and not local_client:
+                provided = request.headers.get("authorization", "").encode("utf-8", "replace")
+                expected = f"Bearer {settings.api_token}".encode()
+                if not secrets.compare_digest(provided, expected):
+                    return JSONResponse(
+                        status_code=401,
+                        content={
+                            "error": {
+                                "code": "invalid_api_token",
+                                "message": "缺少或错误的访问令牌，请携带 Authorization: Bearer 令牌重试。",
+                            }
+                        },
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+        return await call_next(request)
+
     app.add_middleware(
-        TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"]
+        TrustedHostMiddleware,
+        allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver", *settings.allowed_hosts],
     )
 
     @app.middleware("http")

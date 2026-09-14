@@ -2,6 +2,7 @@
 
 import importlib
 import os
+import re
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -10,6 +11,32 @@ from zhijing.core.config import Settings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEPENDENCIES = ("fastapi", "pydantic", "uvicorn", "httpx", "genanki")
+_ENV_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def load_local_env(env_file: Path | None = None) -> Path | None:
+    """Read a local .env into the process environment; explicit variables always win."""
+    # Packaged desktop builds deliberately carry no personal credentials.
+    if getattr(sys, "frozen", False):
+        return None
+    path = env_file if env_file is not None else PROJECT_ROOT / ".env"
+    if not path.is_file():
+        return None
+    for raw in path.read_text("utf-8-sig").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not _ENV_KEY.fullmatch(key):
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+    return path
 
 
 def normalize_data_directory() -> None:
@@ -20,6 +47,7 @@ def normalize_data_directory() -> None:
 
 
 def check_environment() -> dict:
+    load_local_env()
     normalize_data_directory()
     errors = []
     try:

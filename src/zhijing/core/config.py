@@ -32,6 +32,8 @@ class Settings:
     zhihu_url: ClassVar[str] = "https://developer.zhihu.com/api/v1/content/zhihu_search"
     zhihu_access_secret: str = field(default="", repr=False)
     zhihu_timeout: float = 20
+    allowed_hosts: tuple[str, ...] = ()
+    api_token: str = field(default="", repr=False)
 
     def validation_errors(self) -> list[str]:
         errors = []
@@ -39,6 +41,19 @@ class Settings:
             not 33 <= ord(character) <= 126 for character in self.zhihu_access_secret
         ):
             errors.append("知乎 Access Secret 格式无效，请重新复制密钥。")
+        if any(
+            not host or len(host) > 253 or any(character.isspace() for character in host)
+            for host in self.allowed_hosts
+        ):
+            errors.append(
+                "ZHIJING_ALLOWED_HOSTS must be comma-separated host names without spaces."
+            )
+        if self.api_token and (
+            len(self.api_token) < 16 or any(not 33 <= ord(character) <= 126 for character in self.api_token)
+        ):
+            errors.append(
+                "ZHIJING_API_TOKEN must be at least 16 printable ASCII characters when set."
+            )
         if not math.isfinite(self.zhihu_timeout) or not 1 <= self.zhihu_timeout <= 120:
             errors.append("ZHIHU_SEARCH_TIMEOUT 必须在 1 到 120 秒之间。")
         if self.model_provider not in {"extractive", "ollama", "openai"}:
@@ -132,6 +147,8 @@ class Settings:
             openai_max_tokens=_number("ZHIJING_OPENAI_MAX_TOKENS", "4096", int),
             openai_context_window=_number("ZHIJING_OPENAI_CONTEXT_WINDOW", "32768", int),
             openai_thinking=os.getenv("ZHIJING_OPENAI_THINKING", "auto"),
+            allowed_hosts=_hosts(os.getenv("ZHIJING_ALLOWED_HOSTS", "")),
+            api_token=os.getenv("ZHIJING_API_TOKEN", "").strip(),
         )
 
 
@@ -140,3 +157,7 @@ def _number(name: str, default: str, converter):
         return converter(os.getenv(name, default))
     except ValueError as exc:
         raise ValueError(f"{name} must be a valid number.") from exc
+
+
+def _hosts(raw: str) -> tuple[str, ...]:
+    return tuple(host.strip() for host in raw.split(",") if host.strip())

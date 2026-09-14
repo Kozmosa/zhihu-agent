@@ -32,7 +32,13 @@ v0.2 已为长文拆解、答主问答、记忆卡片、事实审查、知识地
 & 'E:\CzCode\codex\envs\zhijing\Scripts\python.exe' 'E:\CzCode\ZhiJing Agent\main.py' --port 8001
 ```
 
-使用已安装依赖的解释器，也可在项目目录直接执行 `python main.py`。加 `--open-browser` 会在健康检查通过后打开浏览器。若端口被占用，选择其他端口，不会自动关闭已有服务。
+使用已安装依赖的解释器，也可在项目目录直接执行 `python main.py`。加 `--open-browser` 会在健康检查通过后打开浏览器。若端口被占用，选择其他端口，不会自动关闭已有服务。监听地址与端口优先级为 `--host/--port` 参数、`ZHIJING_HOST`/`ZHIJING_PORT` 环境变量、平台 `PORT` 变量、默认 `127.0.0.1:8000`；这些变量同样支持写进项目 `.env`。
+
+### 部署到长驻平台（如 Render）
+
+服务可部署到 Render 这类长驻容器平台。注意三点边界：页面（`/`、`/workspace`、`/admin`、`/desktop`）仍仅允许本机客户端访问，公网可用的只有 `/api/v1/*` 业务接口、`/docs` 和 `/health`；业务接口默认没有认证，公网部署必须设置 `ZHIJING_API_TOKEN`（至少 16 个可打印字符），设置后非本机客户端需携带 `Authorization: Bearer <令牌>`，本机访问不受影响；令牌只在启动时读取，修改需重启服务。
+
+Render 配置参考：Build Command 用 `pip install -r requirements-lock.txt .`，Start Command 用 `python main.py --host 0.0.0.0 --port $PORT`。环境变量至少设置 `ZHIJING_ALLOWED_HOSTS=你的域名.onrender.com`（放行该域名的 Host 头）、`ZHIJING_API_TOKEN`（公网 API 访问令牌）、`ZHIJING_DATA_DIR` 指向持久磁盘挂载点；模型与知乎密钥照常使用 `ZHIJING_*` 环境变量。数据是 SQLite 文件，免费实例没有持久磁盘，每次部署或重启都会清空资料，仅适合演示；正式使用需要付费实例挂载磁盘。
 
 首次使用请在 `POST /api/v1/sources/import` 导入 [examples/sources.json](examples/sources.json)，用响应中的 `source_id` 测试各接口；示例不会随启动自动写入数据库。也可运行 `scripts/demo.py`，它会导入同一组示例并调用统一工作流。
 
@@ -146,7 +152,7 @@ $env:ZHIJING_OLLAMA_MODEL = '替换为服务端可用的模型名'
 & 'E:\CzCode\ZhiJing Agent\Start.cmd'
 ```
 
-地址填写服务基地址，允许末尾 `/api` 和代理前缀，不填写完整 `/api/generate` 或 `/api/chat`。Ollama 模式不能直接使用 OpenAI `/v1` API；兼容接口请使用首页的 OpenAI 兼容模式。`.env.example` 仅作参考，`.env` 不会自动加载。格式模式、可选密钥和上下文预算见 [接入说明](Ollama接入说明.md)。
+地址填写服务基地址，允许末尾 `/api` 和代理前缀，不填写完整 `/api/generate` 或 `/api/chat`。Ollama 模式不能直接使用 OpenAI `/v1` API；兼容接口请使用首页的 OpenAI 兼容模式。源码运行时项目根目录的 `.env` 会在启动时自动读取（参照 `.env.example`，已在 `.gitignore` 中排除；进程环境变量优先于文件，打包桌面版不读取）。格式模式、可选密钥和上下文预算见 [接入说明](Ollama接入说明.md)。
 
 五项结果通过 `mode` 区分 `extractive`、`ollama` 与 `openai`。没有可用证据时，问答、审查和地图会直接返回不足或空结果；模型错误会明确失败，不会静默切回规则。事实审查只解释当前证据与主张的关系，引用存在不等于判断正确或事实为真。
 

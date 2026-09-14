@@ -57,7 +57,7 @@ ZhiJing Agent/
 ├── pyproject.toml              包、依赖、测试与代码规范配置
 ├── requirements-lock.txt       本次验证环境的精确依赖版本
 ├── environment.yml            可选 Conda Python 3.12 环境描述
-├── .env.example               环境变量参考，不自动加载
+├── .env.example               环境变量参考；同名 .env 源码启动时自动读取
 ├── project-info.json          指南与启动入口索引
 ├── examples/sources.json       合成示例数据
 ├── scripts/demo.py            HTTP 完整流程演示
@@ -137,7 +137,7 @@ $env:ZHIJING_OLLAMA_MODEL = '你已安装的模型名'
 
 五项服务共用 Ollama 适配器，但分别定义提示、结构化输出和业务校验。阅读发送完整分段原文，制卡发送选定原文，地图发送所选资料全部分块，问答和审查发送检索证据。默认单次调用超时 120 秒、输出预算 4096、上下文 32768；不会执行模型输出中的命令。切回离线模式设置 `$env:ZHIJING_MODEL_PROVIDER = 'extractive'` 后重启。
 
-输入预算包括完整 system 与 prompt，其中含任务、资料和 JSON Schema；还以 UTF-8 字节数加输出预算和 512 预留估计上下文。它是保守估计，不是真实 tokenizer。超限返回 413，不静默裁剪正文。完整配置、URL 规则、可选鉴权、schema/json/prompt 模式和真实 API 验证见 [Ollama 接入说明](Ollama接入说明.md)。`.env` 不会自动加载。
+输入预算包括完整 system 与 prompt，其中含任务、资料和 JSON Schema；还以 UTF-8 字节数加输出预算和 512 预留估计上下文。它是保守估计，不是真实 tokenizer。超限返回 413，不静默裁剪正文。完整配置、URL 规则、可选鉴权、schema/json/prompt 模式和真实 API 验证见 [Ollama 接入说明](Ollama接入说明.md)。源码启动会自动读取项目根目录的 `.env`，进程环境变量优先。
 
 五项结果通过 `mode=extractive/ollama` 标明实际路径。空地图、无证据问答与事实审查不调用模型；不存在的阅读或制卡资料直接返回 404。引用编号及摘录验证只能证明引用来自输入，不能保证模型解释、推理或事实判断正确。答主 `citations` 是输入上下文列表，答案中的 `[n]` 对应该列表的第 n 条；完整列表不表示模型逐条使用了所有证据。
 

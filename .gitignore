@@ -26,3 +26,6 @@ htmlcov/
 # Local review snapshots, logs and isolated test data stay on this machine.
 src/.backend-work/
 src/_review/
+
+# Local diagram exports and captured images stay on this machine.
+diagrams/

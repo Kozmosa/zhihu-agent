@@ -94,6 +94,65 @@ def test_server_uses_requested_port_and_loopback(monkeypatch):
     assert created[0].config.app == "zhijing.app:create_app"
 
 
+def test_server_honours_listen_environment(monkeypatch):
+    import uvicorn
+
+    created = []
+
+    class FakeServer:
+        def __init__(self, config):
+            self.config = config
+            self.started = False
+            created.append(self)
+
+        def run(self):
+            self.started = True
+
+    monkeypatch.setattr(uvicorn, "Server", FakeServer)
+    monkeypatch.setenv("ZHIJING_MODEL_PROVIDER", "extractive")
+    monkeypatch.setenv("ZHIJING_HOST", "0.0.0.0")
+    monkeypatch.setenv("ZHIJING_PORT", "9000")
+    monkeypatch.setenv("PORT", "7777")
+    assert cli.main([]) == 0
+    assert created[0].config.host == "0.0.0.0"
+    assert created[0].config.port == 9000
+    # Explicit flags keep winning over the environment.
+    assert cli.main(["--host", "127.0.0.1", "--port", "8765"]) == 0
+    assert created[1].config.host == "127.0.0.1"
+    assert created[1].config.port == 8765
+
+
+def test_server_falls_back_to_platform_port(monkeypatch):
+    import uvicorn
+
+    created = []
+
+    class FakeServer:
+        def __init__(self, config):
+            self.config = config
+            self.started = False
+            created.append(self)
+
+        def run(self):
+            self.started = True
+
+    monkeypatch.setattr(uvicorn, "Server", FakeServer)
+    monkeypatch.setenv("ZHIJING_MODEL_PROVIDER", "extractive")
+    monkeypatch.delenv("ZHIJING_HOST", raising=False)
+    monkeypatch.delenv("ZHIJING_PORT", raising=False)
+    monkeypatch.setenv("PORT", "7777")
+    assert cli.main([]) == 0
+    assert created[0].config.host == "127.0.0.1"
+    assert created[0].config.port == 7777
+
+
+def test_invalid_listen_environment_is_rejected(monkeypatch, capsys):
+    monkeypatch.setenv("ZHIJING_MODEL_PROVIDER", "extractive")
+    monkeypatch.setenv("ZHIJING_PORT", "not-a-port")
+    assert cli.main([]) == 2
+    assert "port" in capsys.readouterr().err.lower()
+
+
 def test_failed_preflight_does_not_start_server(monkeypatch, capsys):
     monkeypatch.setattr(
         cli, "check_environment", lambda: {"ready": False, "errors": ["Missing dependency"]}

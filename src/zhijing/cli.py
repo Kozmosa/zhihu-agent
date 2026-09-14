@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sys
 from threading import Event
 
@@ -19,10 +20,37 @@ def valid_port(value: str) -> int:
     return port
 
 
+def valid_host(value: str) -> str:
+    value = value.strip()
+    if not value or any(character.isspace() for character in value):
+        raise argparse.ArgumentTypeError("host must be a hostname or IP address without spaces")
+    return value
+
+
+def resolve_listen(cli_host: str | None, cli_port: int | None) -> tuple[str, int]:
+    """Explicit flags win, then ZHIJING_HOST/ZHIJING_PORT, then platform PORT."""
+    try:
+        host = cli_host or valid_host(os.getenv("ZHIJING_HOST", "127.0.0.1"))
+        port = cli_port if cli_port is not None else valid_port(
+            os.getenv("ZHIJING_PORT") or os.getenv("PORT") or "8000"
+        )
+    except argparse.ArgumentTypeError as exc:
+        raise ValueError(str(exc)) from exc
+    return host, port
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="ZhiJing Agent server (local access only)")
     parser.add_argument("transcript_run_id", nargs="?", help=argparse.SUPPRESS)
-    parser.add_argument("--port", type=valid_port, default=8000, help="HTTP port (default: 8000)")
+    parser.add_argument(
+        "--port", type=valid_port, default=None, help="HTTP port (default: ZHIJING_PORT, PORT, 8000)"
+    )
+    parser.add_argument(
+        "--host",
+        type=valid_host,
+        default=None,
+        help="bind address (default: ZHIJING_HOST or 127.0.0.1)",
+    )
     parser.add_argument(
         "--open-browser", action="store_true", help="Open model settings when healthy"
     )
@@ -56,13 +84,20 @@ def main(argv: list[str] | None = None) -> int:
 
     import uvicorn
 
-    base_url = f"http://127.0.0.1:{args.port}"
+    try:
+        host, port = resolve_listen(args.host, args.port)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    base_url = f"http://127.0.0.1:{port}"
     print(f"ZhiJing Agent | Model settings: {base_url}/", flush=True)
     print(f"API documentation: {base_url}/docs", flush=True)
     print(f"Data directory: {report['data_dir']}", flush=True)
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        print(f"Listening on {host}:{port}.", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
     server = uvicorn.Server(
-        uvicorn.Config("zhijing.app:create_app", factory=True, host="127.0.0.1", port=args.port)
+        uvicorn.Config("zhijing.app:create_app", factory=True, host=host, port=port)
     )
     stop = Event()
     if args.open_browser:
