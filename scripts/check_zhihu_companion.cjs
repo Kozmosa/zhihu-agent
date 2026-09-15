@@ -66,7 +66,7 @@ const test = (name, run) => tests.push({ name, run });
 
 test('metadata limits hosts and contains no credential APIs or remote dependencies', () => {
   assert.match(source, /@name\s+知乎伴侣·知境版/);
-  assert.match(source, /@version\s+0\.8\.3/);
+  assert.match(source, /@version\s+0\.8\.5/);
   assert.match(source, /Kozmosa（原版 0\.8\.2）/);
   assert.deepEqual([...source.matchAll(/@connect\s+(\S+)/g)].map(match => match[1]), ['127.0.0.1', 'localhost']);
   assert.doesNotMatch(source, /document\s*\.\s*cookie|localStorage|sessionStorage|@require|@grant\s+GM_cookie|headers\s*:\s*\{[^}]*\bCookie\b/s);
@@ -185,6 +185,32 @@ test('answer detail sends its own answer, not a preceding recommended answer', a
   assert.equal(payload.items.length, 1); assert.equal(payload.items[0].external_id, '102');
 });
 
+test('question page header wins over nested author metadata for all five answers', () => {
+  const names = ['Jhon Smith', '忧郁的Tom', '宝塔山赵四', '猴姆', '鹅妈妈密密麻麻'];
+  const html = '<h1 class="QuestionHeader-title">这才是五篇回答共同的问题？</h1>' + names.map((name, i) => answer({id:String(101+i), authorName:name})).join('');
+  const b = browser('https://www.zhihu.com/question/10', html);
+  for (const item of b.document.querySelectorAll('.AnswerItem')) {
+    item.querySelector('h2').remove();
+    item.removeAttribute('data-zop');
+    item.querySelector('.AuthorInfo').innerHTML += '<span itemprop="author" itemtype="http://schema.org/Person"><meta itemprop="name" content="Jhon Smith"></span>';
+  }
+  const items = b.api.gatherItems(b.api.pageScope()).items;
+  assert.equal(items.length, 5);
+  assert(items.every(item => item.title === '这才是五篇回答共同的问题？'));
+  assert.deepEqual(Array.from(items, item=>item.author_name), names);
+});
+
+test('author metadata cannot become a missing question title or overwrite another question', () => {
+  const b = browser('https://www.zhihu.com/people/alice/answers', answer());
+  const item = b.document.querySelector('.AnswerItem');
+  item.querySelector('h2').remove(); item.removeAttribute('data-zop');
+  item.querySelector('.AuthorInfo').innerHTML += '<span itemprop="author" itemtype="http://schema.org/Person"><meta itemprop="name" content="Jhon Smith"></span>';
+  assert.equal(b.api.gatherItems(b.api.pageScope()).items[0].title, '未提供题目');
+  const other = browser('https://www.zhihu.com/question/10', '<h1 class="QuestionHeader-title">当前问题</h1>' + answer({question:'11', title:'另一个问题'}));
+  const collected = other.api.collectItem(other.document.querySelector('.AnswerItem'), {scope:'page'});
+  assert.equal(collected.title,'另一个问题');
+});
+
 test('request size is rejected before any content is silently truncated or sent', async () => {
   const b = browser('https://www.zhihu.com/question/10', answer());
   const item = b.api.gatherItems(b.api.pageScope()).items[0]; item.text = '字'.repeat(100001);
@@ -197,10 +223,30 @@ test('batch panel defaults to loaded DOM only and user click sends selected-limi
   b.api.openCollectionPanel();
   const panel = b.document.getElementById('__zhijing_collect_panel__');
   assert.equal(panel.querySelector('#__zj_scroll__').checked, false);
+  assert.match(panel.querySelector('#__zj_scope__').textContent, /当前问题：10.*多位作者/);
+  assert.match(panel.querySelector('#__zj_connection__').textContent, /发送时验证/);
+  assert.doesNotMatch(panel.textContent, new RegExp(fakeToken));
+  assert.equal(b.requests.length, 0, 'Opening panel must not send data');
   panel.querySelector('#__zj_votes__').value = '50'; panel.querySelector('#__zj_limit__').value = '1';
   Array.from(panel.querySelectorAll('button')).find(button => button.textContent === '开始收集并发送').click();
   await tick();
   assert.equal(b.requests.length, 1); assert.equal(JSON.parse(b.requests[0].data).items[0].external_id, '102');
+  assert.match(panel.querySelector('#__zj_connection__').textContent, /连接正常/);
+  assert.match(panel.querySelector('[role="status"]').textContent, /涉及 1 个问题/);
+  assert.equal(panel.querySelector('#__zj_votes__').disabled, false);
+});
+
+test('author and unpaired panels describe scope honestly without network or secrets', async () => {
+  const b = browser('https://www.zhihu.com/people/alice/answers', answer(), {paired: false});
+  b.api.openCollectionPanel();
+  const panel = b.document.getElementById('__zhijing_collect_panel__');
+  assert.match(panel.querySelector('#__zj_scope__').textContent, /当前作者：alice.*按问题预览/);
+  assert.match(panel.querySelector('#__zj_connection__').textContent, /尚未连接/);
+  Array.from(panel.querySelectorAll('button')).find(button => button.textContent === '开始收集并发送').click();
+  await tick();
+  assert.equal(b.requests.length, 0);
+  assert.equal(panel.querySelector('#__zj_limit__').disabled, false);
+  assert.match(panel.querySelector('[role="status"]').textContent, /连接当前知境/);
 });
 
 test('queue-full errors explain resolution and explicit discard unblocks fresh collection', async () => {

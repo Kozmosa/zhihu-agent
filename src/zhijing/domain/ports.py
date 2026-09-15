@@ -11,6 +11,7 @@ from zhijing.domain.models import (
     Generation,
     Source,
     SourceDraft,
+    SourceGroup,
     SourceGroupPage,
     SourcePage,
 )
@@ -37,6 +38,7 @@ class SourceRepository(Protocol):
         question_id: str | None = None,
     ) -> SourcePage: ...
     def groups(self, by: str, query: str, offset: int, limit: int) -> SourceGroupPage: ...
+    def set_question_title(self, question_id: str, title: str) -> SourceGroup: ...
     def delete_many(self, source_ids: list[str]) -> list[str]: ...
 
 
