@@ -13,7 +13,7 @@ TOKEN = "unit-test-token-0123456789"
 
 def remote_client(tmp_path, **settings):
     app = create_app(Settings(data_dir=tmp_path, **settings))
-    return TestClient(app, client=("192.0.2.30", 12345))
+    return TestClient(app, client=("192.0.2.30", 12345), base_url="http://127.0.0.1")
 
 
 def test_remote_business_api_requires_bearer_token(tmp_path):
@@ -35,7 +35,9 @@ def test_local_clients_settings_and_health_stay_open(tmp_path):
         # Settings endpoints keep their own local-only guard instead of the token.
         assert remote.get("/api/v1/settings/model").status_code == 403
     with TestClient(
-        create_app(Settings(data_dir=tmp_path, api_token=TOKEN)), client=("127.0.0.1", 12345)
+        create_app(Settings(data_dir=tmp_path, api_token=TOKEN)),
+        client=("127.0.0.1", 12345),
+        base_url="http://127.0.0.1",
     ) as local:
         assert local.get("/api/v1/runs").status_code == 200
         # 设置接口除本机外还要页面会话令牌，与是否配置 API 令牌无关。

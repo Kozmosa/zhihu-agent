@@ -7,13 +7,19 @@ from zhijing.core.config import Settings
 
 
 def test_public_host_is_rejected_by_default(tmp_path):
-    with TestClient(create_app(Settings(data_dir=tmp_path))) as client:
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)), base_url="http://127.0.0.1"
+    ) as client:
         assert client.get("/health", headers={"host": "app.onrender.com"}).status_code == 400
+        # The test client's own default host is not a production host either.
+        assert client.get("/health", headers={"host": "testserver"}).status_code == 400
 
 
 def test_configured_hosts_admit_remote_clients_without_weakening_defaults(tmp_path):
     settings = Settings(data_dir=tmp_path, allowed_hosts=("app.onrender.com",))
-    with TestClient(create_app(settings), client=("10.20.30.40", 55555)) as client:
+    with TestClient(
+        create_app(settings), client=("10.20.30.40", 55555), base_url="http://127.0.0.1"
+    ) as client:
         assert client.get("/health", headers={"host": "app.onrender.com"}).status_code == 200
         assert client.get("/health").status_code == 200
         assert client.get("/health", headers={"host": "evil.example"}).status_code == 400
