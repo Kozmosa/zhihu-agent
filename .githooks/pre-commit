@@ -1,0 +1,13 @@
+#!/bin/sh
+# Check the staged snapshot, including content no longer present in the working tree.
+if [ -x .conda/python.exe ]; then
+  exec .conda/python.exe -s -B scripts/check_secrets.py --staged
+elif [ -x .venv/Scripts/python.exe ]; then
+  exec .venv/Scripts/python.exe -s -B scripts/check_secrets.py --staged
+elif [ -x .venv/bin/python ]; then
+  exec .venv/bin/python -s -B scripts/check_secrets.py --staged
+elif command -v python >/dev/null 2>&1; then
+  exec python -s -B scripts/check_secrets.py --staged
+else
+  exec python3 -s -B scripts/check_secrets.py --staged
+fi

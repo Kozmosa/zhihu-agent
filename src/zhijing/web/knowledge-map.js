@@ -110,7 +110,7 @@
     const state = {selected: ordered[0]?.id, view: 'map', query: '', listLimit: 20, zoom: 1};
     const prefix = 'km-' + (++sequence), cap = compact ? 7 : 18;
     const shell = el('section', undefined, 'knowledge-map' + (compact ? ' km-compact' : ''));
-    shell.setAttribute('aria-label', '知识地图探索器'); root.replaceChildren(shell);
+    shell.setAttribute('aria-label', '思维导图探索器'); root.replaceChildren(shell);
     const overview = el('div', undefined, 'km-overview');
     const heading = el('div');
     heading.append(el('span', graph.mode === 'extractive' ? '资料分类图' : '概念关系图', 'km-eyebrow'),
@@ -120,7 +120,7 @@
     const download = button('导出 JSON', 'km-export', () => {
       const blob = new Blob([JSON.stringify(graph, null, 2)], {type: 'application/json;charset=utf-8'});
       const url = URL.createObjectURL(blob), link = el('a');
-      link.href = url; link.download = '知境知识地图-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+      link.href = url; link.download = '知境思维导图-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
       link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
     overview.append(heading, download); shell.append(overview);
@@ -206,7 +206,7 @@
       const visibleEdges = edges.filter(edge => ids.has(edge.source) && ids.has(edge.target));
       const {points, bounds} = layout(preview, visibleEdges, state.selected, compact);
       base = bounds; camera = {...base}; state.zoom = 1;
-      canvas.replaceChildren(svg('title', {}, '知识地图'));
+      canvas.replaceChildren(svg('title', {}, '思维导图'));
       const defs = svg('defs'), marker = svg('marker', {id: prefix + '-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto'});
       marker.append(svg('path', {d: 'M 0 0 L 10 5 L 0 10 z', fill: '#9aaac5'})); defs.append(marker); canvas.append(defs);
       visibleEdges.forEach((edge, index) => {

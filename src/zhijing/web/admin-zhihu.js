@@ -19,7 +19,7 @@
     configured = result.configured === true;
     $('zhihu-config-state').textContent = configured
       ? '已保存知乎搜索凭据；实际搜索时验证其有效性。'
-      : '尚未配置知乎搜索凭据。用户仍可导入已有资料并使用五项能力。';
+      : '尚未配置知乎搜索凭据。用户仍可导入已有资料并使用阅读与知识功能。';
     controls();
   }
 
@@ -28,7 +28,7 @@
     try {
       response = await fetch(path, {
         method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
-        headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
+        headers: body === undefined ? {'X-Zhijing-Token': token} : {'Content-Type': 'application/json', 'X-Zhijing-Token': token},
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch { throw new Error('无法连接本地服务，请确认服务仍在运行。'); }

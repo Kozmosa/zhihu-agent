@@ -4,10 +4,13 @@ from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+from zhijing.core.redaction import SecretRedactor
+
 
 class SQLiteTranscript:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, secrets=()):
         self.path = path
+        self.redactor = SecretRedactor(secrets)
 
     @contextmanager
     def _connection(self):
@@ -52,8 +55,8 @@ class SQLiteTranscript:
                     attempt,
                     event,
                     provider,
-                    model,
-                    json.dumps(payload or {}, ensure_ascii=False),
+                    self.redactor.text(model),
+                    json.dumps(self.redactor.value(payload or {}), ensure_ascii=False),
                     datetime.now(UTC).isoformat(),
                 ),
             )
@@ -77,4 +80,7 @@ class SQLiteTranscript:
             "payload",
             "created_at",
         ]
-        return [dict(zip(keys, row, strict=True)) | {"payload": json.loads(row[8])} for row in rows]
+        return [
+            self.redactor.value(dict(zip(keys, row, strict=True)) | {"payload": json.loads(row[8])})
+            for row in rows
+        ]

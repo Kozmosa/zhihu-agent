@@ -55,6 +55,20 @@ class SourcePage(Schema):
     has_more: bool
 
 
+class SourceGroup(Schema):
+    key: str
+    name: str
+    count: int
+
+
+class SourceGroupPage(Schema):
+    items: list[SourceGroup]
+    total: int
+    offset: int
+    limit: int
+    has_more: bool
+
+
 class Citation(Schema):
     source_id: str
     title: str

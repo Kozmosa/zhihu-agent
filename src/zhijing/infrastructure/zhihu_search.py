@@ -7,6 +7,7 @@ import httpx
 
 from zhijing.core.config import Settings
 from zhijing.core.errors import DomainError
+from zhijing.core.redaction import SecretRedactor
 
 MAX_RESPONSE_BYTES = 4_000_000
 
@@ -15,10 +16,17 @@ class ZhihuSearchClient:
     def __init__(self, client: httpx.Client, access_secret: str):
         self.client = client
         self._access_secret = access_secret
+        self._redactor = SecretRedactor((access_secret,))
 
     def search(self, query: str, count: int) -> dict:
         if not self._access_secret:
             raise DomainError("zhihu_not_configured", "请先配置知乎 Access Secret。", 409)
+        # GET parameters appear in URLs and can reach access logs. Reject an
+        # accidental credential paste before constructing or sending a request.
+        if self._redactor.contains(query):
+            raise DomainError(
+                "zhihu_sensitive_query", "搜索内容包含已配置的密钥，请移除后重试。", 422
+            )
         try:
             with self.client.stream(
                 "GET",
@@ -88,6 +96,4 @@ class ZhihuSearchClient:
 
     def contains_secret(self, item: dict) -> bool:
         # Do not expose a credential if a malformed upstream response happens to reflect it.
-        return bool(
-            self._access_secret and self._access_secret in json.dumps(item, ensure_ascii=False)
-        )
+        return self._redactor.contains(json.dumps(item, ensure_ascii=False))

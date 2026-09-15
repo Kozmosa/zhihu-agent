@@ -8,7 +8,8 @@ const html = fs.readFileSync(path.join(root, 'src/zhijing/web/companion.html'), 
 const script = fs.readFileSync(path.join(root, 'src/zhijing/web/companion.js'), 'utf8');
 const toolNames = ['reading', 'author', 'cards', 'facts', 'knowledge'];
 const token = 'synthetic-companion-session';
-const storageKey = 'zhijing.companion.source.' + token;
+const sessionId = 'synthetic-public-session-id';
+const storageKey = 'zhijing.companion.source.' + sessionId;
 const cases = [];
 const copy = value => JSON.parse(JSON.stringify(value));
 
@@ -21,6 +22,7 @@ function source(index) {
 function environment({savedId, storageFails = false} = {}) {
   const nodes = new Map(), created = [], requests = [], downloads = [], gates = new Map(), failures = new Map();
   const mapRenders = [];
+  const opinionMounts = [];
   const stored = new Map(savedId ? [[storageKey, savedId]] : []);
   const sources = Array.from({length: 25}, (_, index) => source(index + 1));
   sources[1].content_extent = 'excerpt';
@@ -41,7 +43,7 @@ function environment({savedId, storageFails = false} = {}) {
     click() { if (this.tagName === 'a') downloads.push({href: this.href, name: this.download}); return this.events.click?.(); }
     set innerHTML(_) { throw new Error('Source text must never become HTML'); }
   }
-  for (const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
+  for (const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\sid="([^"]+)"[^>]*)>/g)) {
     const item = new Element(match[1]); item.id = match[3];
     item.hidden = /\bhidden\b/.test(match[2]); item.open = /\bopen\b/.test(match[2]);
   }
@@ -52,7 +54,7 @@ function environment({savedId, storageFails = false} = {}) {
   }
   const body = new Element('body');
   const documentListeners = new Map();
-  const document = {body, currentScript: {dataset: {configToken: token}},
+  const document = {body, currentScript: {dataset: {configToken: token, sessionId}},
     addEventListener: (name, listener) => { if (!documentListeners.has(name)) documentListeners.set(name, []); documentListeners.get(name).push(listener); },
     dispatchEvent: event => Promise.all((documentListeners.get(event.type) || []).map(listener => listener(event))),
     getElementById: id => nodes.get(id) || null, createElement: tag => new Element(tag)};
@@ -94,6 +96,10 @@ function environment({savedId, storageFails = false} = {}) {
     static revokeObjectURL() {}
   }
   const sandbox = {document, sessionStorage, URL: TestURL, URLSearchParams,
+    ZhijingOpinionMap: {mount(root, options) {
+      const record = {root, options, active: false}; opinionMounts.push(record);
+      return {setActive: active => { record.active = active; }};
+    }},
     // The shared map owns its own DOM tests. This stub verifies the host lifecycle
     // and receives the full response unchanged, including evidence and coverage.
     ZhijingKnowledgeMap: {render(root, result, options) {
@@ -107,7 +113,7 @@ function environment({savedId, storageFails = false} = {}) {
       const url = new URL(relative, 'http://127.0.0.1');
       const body = options.body ? JSON.parse(options.body) : undefined;
       requests.push({path: url.pathname, relative, options, body});
-      if (body) assert.equal(options.headers['X-Zhijing-Token'], token);
+      assert.equal(options.headers['X-Zhijing-Token'], token);
       const gate = gates.get(url.pathname), failure = failures.get(url.pathname);
       gates.delete(url.pathname); failures.delete(url.pathname);
       inflight++;
@@ -128,15 +134,26 @@ function environment({savedId, storageFails = false} = {}) {
   const submit = async tool => { await event('tool-form-' + tool, 'submit'); await idle(); };
   const select = async id => { get('companion-source').value = id; await event('companion-source', 'change'); };
   const defer = pathname => { let resolve; gates.set(pathname, new Promise(done => { resolve = done; })); return resolve; };
-  return {nodes, get, text, requests, downloads, sources, stored, failures, created, idle, event, click, submit, select, defer, document, mapRenders};
+  return {nodes, get, text, requests, downloads, sources, stored, failures, created, idle, event, click, submit, select, defer, document, mapRenders, opinionMounts};
 }
 
 (async () => {
   assert(!html.includes('/assets/workspace.js'), 'The companion must not load workspace handlers');
   assert(html.indexOf('/assets/knowledge-map.js') < html.indexOf('/assets/companion.js'));
-  assert.match(html, /src="\/assets\/knowledge-map.js" nonce="__CONFIG_TOKEN__"/);
+  assert.match(html, /src="\/assets\/knowledge-map.js" nonce="__CSP_NONCE__"/);
   assert(html.includes('/assets/knowledge-map.css'));
+  assert(html.indexOf('/assets/opinion-flow.js') < html.indexOf('/assets/opinion-map.js'));
+  assert(html.indexOf('/assets/opinion-map.js') < html.indexOf('/assets/companion.js'));
+  assert(html.includes('<span>思维导图</span>'));
   const ui = environment(); await ui.idle();
+  assert.equal(ui.opinionMounts.length, 1);
+  assert.equal(ui.opinionMounts[0].options.compact, true);
+  await ui.click('tool-tab-opinions');
+  assert.equal(ui.opinionMounts[0].active, true);
+  assert.equal(ui.get('tool-pane-opinions').hidden, false);
+  await ui.click('tool-tab-author');
+  assert.equal(ui.opinionMounts[0].active, false);
+  cases.push('new opinion map mounts inside companion and deactivates when changing tabs; mind diagram retained');
   assert.equal(ui.get('tool-pane-author').hidden, false);
   for (const tool of toolNames) assert.equal(ui.get('tool-run-' + tool).disabled, true);
   assert(!ui.requests.some(item => item.body));

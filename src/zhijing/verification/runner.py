@@ -159,6 +159,9 @@ def _safe_error_code(value):
         "model_timeout",
         "model_unavailable",
         "model_invalid_response",
+        "model_output_truncated",
+        "cards_format_invalid",
+        "cards_evidence_invalid",
         "model_input_too_large",
         "model_context_exceeded",
         "model_batch_limit",
@@ -264,7 +267,12 @@ def run_verification(
                         and model != getattr(active, f"{provider}_api_key")
                         else "redacted"
                     )
-                with TestClient(create_app(active)) as client:
+                from zhijing.local_auth import connect_local_client
+
+                with TestClient(
+                    create_app(active), base_url="http://127.0.0.1", client=("127.0.0.1", 12345)
+                ) as client:
+                    connect_local_client(client)
                     with client.app.state.runtime.lease() as container:
                         if container.model_client is not None:
                             container.model_client.event_hooks["request"].append(probe.request)

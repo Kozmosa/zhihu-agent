@@ -1,9 +1,12 @@
 """模型制卡只生成学习内容和证据摘录，来源标识始终由服务端赋值。"""
 
+import json
+import re
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, ValidationError, model_validator
 
+from zhijing.core.errors import DomainError
 from zhijing.core.output_policy import (
     CARD_BACK_MAX,
     CARD_EVIDENCE_MAX,
@@ -39,6 +42,52 @@ class GeneratedCard(Schema):
 
 class GeneratedCards(Schema):
     cards: list[GeneratedCard] = Field(max_length=30)
+    _rejected_count: int = PrivateAttr(default=0)
+
+    @property
+    def rejected_count(self) -> int:
+        return self._rejected_count
+
+    @classmethod
+    def parse_model_response(cls, text: str) -> Self:
+        """Keep valid candidates without relaxing their schema or source checks.
+
+        Only a complete outer JSON fence is tolerated. Never repair truncated JSON
+        or extract an object from surrounding prose or a model's reasoning.
+        """
+        fenced = re.fullmatch(r"\s*```(?:json)?\s*\n(.*?)\n\s*```\s*", text, re.DOTALL)
+        if fenced:
+            text = fenced[1]
+        try:
+            envelope = json.loads(text)
+            if (
+                not isinstance(envelope, dict)
+                or set(envelope) != {"cards"}
+                or not isinstance(envelope["cards"], list)
+                or len(envelope["cards"]) > 30
+            ):
+                raise ValueError("Invalid cards envelope")
+        except (ValueError, TypeError) as exc:
+            raise DomainError(
+                "cards_format_invalid",
+                "模型未返回完整的卡片 JSON，请减少卡片数量或换用支持 JSON 的模型。",
+                502,
+            ) from exc
+        cards, rejected = [], 0
+        for candidate in envelope["cards"]:
+            try:
+                cards.append(GeneratedCard.model_validate(candidate, strict=True))
+            except ValidationError:
+                rejected += 1
+        if rejected and not cards:
+            raise DomainError(
+                "cards_format_invalid",
+                "卡片字段或长度均未通过校验，请减少卡片数量或换用支持 JSON 的模型。",
+                502,
+            )
+        result = cls(cards=cards)
+        result._rejected_count = rejected
+        return result
 
 
 CARDS_INSTRUCTIONS = (

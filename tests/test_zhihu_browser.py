@@ -38,6 +38,31 @@ def read_result(path):
     return json.loads((path / "result.json").read_text(encoding="utf-8"))
 
 
+def test_author_session_retains_each_question_and_excludes_other_authors(request_file):
+    path, request = request_file
+    request["url"] = "https://www.zhihu.com/people/fixture/answers"
+    session = browser.QuestionReadSession(path, request)
+    session.consume(
+        {
+            "state": "reading",
+            "items": [
+                answer(),
+                answer(
+                    "2",
+                    question_id="456",
+                    url="https://www.zhihu.com/question/456/answer/2",
+                    title="另一个问题",
+                ),
+                answer("3", author_url="https://www.zhihu.com/people/other"),
+            ],
+        },
+        0,
+    )
+    result = read_result(path)
+    assert {item["question_id"] for item in result["items"]} == {"123", "456"}
+    assert len(result["items"]) == 2
+
+
 def test_only_valid_unique_same_question_bodies_are_preserved(request_file):
     path, request = request_file
     session = browser.QuestionReadSession(path, request)

@@ -115,7 +115,7 @@ def mocked_model(generator_type, response):
         return httpx.Response(200, json=envelope)
 
     with httpx.Client(
-        base_url="http://facts-model.invalid", transport=httpx.MockTransport(handle)
+        base_url="https://facts-model.invalid", transport=httpx.MockTransport(handle)
     ) as client:
         yield generator_type(client, "facts-policy-fixture"), calls
 

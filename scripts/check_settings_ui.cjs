@@ -16,16 +16,18 @@ class Element {
 const nodes = new Map([...html.matchAll(/id="([^"]+)"/g)].map(match => [match[1], new Element(match[1])]));
 let active = 'extractive';
 let failure = false;
+let persistence = 'session_only', persistenceSupported = true;
 const requests = [];
-const state = () => ({provider: active, base_url: 'https://fixture.test/v1', model: 'fixture', has_api_key: active !== 'extractive', output_format: 'json', timeout: 120, max_tokens: 4096, context_window: 32768, max_input_chars: 120000});
+const state = () => ({provider: active, base_url: 'https://fixture.test/v1', model: 'fixture', has_api_key: active !== 'extractive', output_format: 'json', timeout: 120, max_tokens: 4096, context_window: 32768, max_input_chars: 120000, persistence, persistence_supported: persistenceSupported});
 const sandbox = {document: {getElementById: id => {assert(nodes.has(id), `Missing element ${id}`); return nodes.get(id);}, querySelectorAll: () => [], createElement: () => new Element('')}, fetch: async (url, options) => {
+  if (url.startsWith('/api/v1/')) assert.equal(options.headers['X-Zhijing-Token'], '__CONFIG_TOKEN__', 'Settings API GET and POST must authenticate');
   requests.push({url, options});
   if (failure) return {ok: false, json: async () => ({error: {message: 'Connection failed'}})};
   let data;
   if (url === '/health') data = {status: 'ok', version: 'test'};
   else if (url === '/api/v1/settings/model') data = state();
   else if (url === '/api/v1/reading/analyze') data = {mode: active, summary: 'Summary', notice: 'Check source', sections: [{index: 0, heading: 'Heading', text: '<script>unsafe</script>', key_points: ['Point'], guiding_question: 'Question'}]};
-  else {const body = JSON.parse(options.body); if(url.endsWith('/apply')) active = body.provider; data = {provider: body.provider, message: 'OK', scope: 'Connection only'};}
+  else {const body = JSON.parse(options.body); if(url.endsWith('/apply')) { active = body.provider; persistence = body.persist ? 'encrypted_local' : 'session_only'; } data = {provider: body.provider, message: 'OK', scope: 'Connection only', persistence};}
   return {ok: true, json: async () => data};
 }};
 vm.createContext(sandbox);
@@ -34,14 +36,21 @@ async function settle() { for(let i=0;i<20;i++) await Promise.resolve(); }
 (async () => {
   await settle();
   assert.match(nodes.get('health').textContent, /test/);
+  assert.equal(nodes.get('persist-model').disabled, false);
+  assert.equal(nodes.get('persist-model').checked, false);
+  nodes.get('persist-model').checked = true;
   nodes.get('api-key').value = 'synthetic-key';
   await vm.runInContext("configure('test')", sandbox);
   assert.equal(active, 'extractive');
+  assert.equal(persistence, 'session_only', 'Testing never persists credentials');
   assert.equal(nodes.get('api-key').value, 'synthetic-key');
   await vm.runInContext("configure('apply')", sandbox);
   assert.equal(active, 'openai');
+  assert.equal(persistence, 'encrypted_local');
+  assert.equal(nodes.get('active-persistence').textContent, '本机加密保存');
   assert.equal(nodes.get('api-key').value, '');
   assert.equal(JSON.parse(requests.find(r => r.url.endsWith('/test')).options.body).api_key, 'synthetic-key');
+  assert.equal(JSON.parse(requests.find(r => r.url.endsWith('/test')).options.body).persist, false);
   nodes.get('reading-text').value = 'Some text';
   await nodes.get('read').events.click();
   const result = nodes.get('reading-result').children;
@@ -54,5 +63,9 @@ async function settle() { for(let i=0;i<20;i++) await Promise.resolve(); }
   failure = false;
   await nodes.get('offline').events.click();
   assert.equal(active, 'extractive');
+  persistenceSupported = false;
+  await vm.runInContext('refresh(true)', sandbox);
+  assert.equal(nodes.get('persist-model').disabled, true);
+  assert.equal(vm.runInContext('configuration().persist', sandbox), false);
   console.log('PASS: initial status, test-only, apply, key clearing, reading output, errors, offline reset. Rendering not verified.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

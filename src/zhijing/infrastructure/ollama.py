@@ -30,10 +30,11 @@ class OllamaGenerator:
         max_input_chars: int = 120000,
         num_predict: int = 4096,
         num_ctx: int = 32768,
+        secret_values=(),
     ):
         if output_format not in {"schema", "json", "prompt"}:
             raise ValueError("Ollama output format must be schema, json, or prompt")
-        self.transport = OllamaTransport(client, model, num_predict, num_ctx)
+        self.transport = OllamaTransport(client, model, num_predict, num_ctx, secret_values)
         self.output_format, self.max_input_chars = output_format, max_input_chars
 
     def generate(
@@ -54,13 +55,18 @@ class OllamaGenerator:
             output_format=None if output_format == "prompt" else output_format,
         )
         try:
+            # A response schema may define candidate-level validation (cards).
+            # Other capabilities retain strict whole-response validation.
+            decoder = getattr(response_model, "parse_model_response", None)
+            if decoder is not None:
+                return decoder(text)
             return response_model.model_validate_json(text, strict=True)
-        except ValidationError as exc:
+        except ValidationError:
             raise DomainError(
                 "model_invalid_response",
                 "模型未返回约定的JSON结构，请检查模型能力或输出长度。",
                 502,
-            ) from exc
+            ) from None
 
     def check_budget(
         self,

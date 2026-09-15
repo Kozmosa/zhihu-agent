@@ -6,6 +6,8 @@ from pathlib import Path
 
 import httpx
 
+from zhijing.local_auth import connect_local_client
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -13,6 +15,7 @@ def main():
     args = parser.parse_args()
     sample = Path(__file__).resolve().parents[1] / "examples" / "sources.json"
     with httpx.Client(base_url=args.url, timeout=90, trust_env=False) as client:
+        connect_local_client(client)
         response = client.post("/api/v1/sources/import", json=json.loads(sample.read_text("utf-8")))
         response.raise_for_status()
         source_id = response.json()[0]["id"]

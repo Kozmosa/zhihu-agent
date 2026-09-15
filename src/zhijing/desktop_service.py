@@ -30,10 +30,9 @@ class _PageTokens(HTMLParser):
         if tag != "script":
             return
         attributes = dict(attrs)
-        for name in ("data-config-token", "nonce"):
-            value = attributes.get(name)
-            if value and re.fullmatch(r"[A-Za-z0-9_-]{20,200}", value):
-                self.tokens.add(value)
+        value = attributes.get("data-config-token")
+        if value and re.fullmatch(r"[A-Za-z0-9_-]{20,200}", value):
+            self.tokens.add(value)
 
 
 class DesktopService:
@@ -53,12 +52,20 @@ class DesktopService:
         self._server: uvicorn.Server | None = None
         self._thread: Thread | None = None
         self._startup_failed = Event()
+        self._config_token: str | None = None
 
     @property
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
 
     def _request(self, method: str, path: str, *, timeout=30, **kwargs) -> httpx.Response:
+        token = None
+        if path.startswith("/api/v1/"):
+            token = self._session_token()
+            headers = httpx.Headers(kwargs.pop("headers", None))
+            headers["X-Zhijing-Token"] = token
+            headers["Origin"] = self.base_url
+            kwargs["headers"] = headers
         try:
             # A fresh client is safe when Tk worker threads issue overlapping requests.
             with httpx.Client(
@@ -79,6 +86,11 @@ class DesktopService:
         if 300 <= response.status_code < 400:
             raise DesktopServiceError("本地服务返回了重定向，已停止请求；请检查端口设置。")
         if response.is_error:
+            if token is not None and response.status_code in {401, 403}:
+                # Refresh only on the next explicit operation, never replay a model request.
+                with self._lock:
+                    if self._config_token == token:
+                        self._config_token = None
             code = None
             try:
                 payload = response.json()
@@ -92,6 +104,9 @@ class DesktopService:
                 "model_timeout": "模型响应超时，请稍后重试；本次请求没有自动重发。",
                 "model_unavailable": "模型服务不可用，请打开模型设置检查连接或切换离线模式。",
                 "model_invalid_response": "模型未返回有效结果，请核对模型设置后重试。",
+                "model_output_truncated": "模型达到输出上限。请减少生成数量，或在模型设置中提高最大输出 Token。",
+                "cards_format_invalid": "卡片格式或字段长度不符。请先试生成 1～3 张，或换用支持 JSON 输出的模型。",
+                "cards_evidence_invalid": "卡片证据无法在资料原文中找到，请重试或换用其他模型。",
                 "model_input_too_large": "当前资料超过模型输入限制，请选择较短的资料。",
                 "model_context_exceeded": "当前资料超过模型上下文限制，请检查模型设置。",
                 "invalid_config_token": "页面会话已更新，请重新连接本地服务后再试。",
@@ -107,6 +122,16 @@ class DesktopService:
                 raise DesktopServiceError("请求内容无效，请检查所选资料和问题。")
             raise DesktopServiceError("本地服务未能完成请求，请稍后重试。")
         return response
+
+    def _session_token(self) -> str:
+        with self._lock:
+            if self._config_token is None:
+                page = self._request("GET", "/workspace", timeout=10)
+                tokens = _PageTokens(page.text).tokens
+                if len(tokens) != 1:
+                    raise DesktopServiceError("无法读取本地页面会话，请检查服务版本后重试。")
+                self._config_token = next(iter(tokens))
+            return self._config_token
 
     @staticmethod
     def _json(response: httpx.Response):
@@ -125,13 +150,57 @@ class DesktopService:
             or not re.fullmatch(r"\d+\.\d+\.\d+(?:[A-Za-z0-9.+-]{0,30})", payload["version"])
         ):
             raise DesktopServiceError("该端口没有返回可识别的知境服务状态，请检查端口设置。")
-        return {key: payload[key] for key in ("status", "version", "model_provider")}
+        health = {key: payload[key] for key in ("status", "version", "model_provider")}
+        if payload.get("api_auth") == "session-v1":
+            health["api_auth"] = "session-v1"
+        return health
 
     def _verify_existing_service(self):
         schema = self._json(self._request("GET", "/openapi.json", timeout=3))
         info = schema.get("info", {}) if isinstance(schema, dict) else {}
         if not isinstance(info, dict) or info.get("title") != "知境 ZhiJing Agent":
             raise DesktopServiceError("该端口被其他服务占用，请选择空闲端口；原服务未被修改。")
+        required = {
+            "/api/v1/sources/groups",
+            "/api/v1/sources/delete",
+            "/api/v1/zhihu/questions/jobs",
+        }
+        paths = schema.get("paths", {})
+        if not isinstance(paths, dict) or not required.issubset(paths):
+            raise DesktopServiceError(
+                "当前端口运行的是旧版知境，缺少资料管理或作者读取组件。请先处理待导入资料并退出旧服务，再启动新版；原服务未被修改。"
+            )
+        incompatible = (
+            "当前端口的知境服务缺少可用的知乎采集组件，可能仍是旧版。"
+            "请退出旧版知境及其本地服务，再重新启动当前程序。"
+        )
+        required_routes = {
+            "/api/v1/zhihu/companion/pair": "post",
+            "/api/v1/zhihu/companion/status": "get",
+            "/api/v1/zhihu/companion/inbox": "get",
+            "/api/v1/zhihu/companion/inbox/{batch_id}": "get",
+            "/api/v1/zhihu/companion/inbox/{batch_id}/dismiss": "post",
+            "/api/v1/zhihu/companion/receive": "post",
+        }
+        paths = schema.get("paths", {})
+        if not isinstance(paths, dict) or any(
+            not isinstance(paths.get(path), dict) or method not in paths[path]
+            for path, method in required_routes.items()
+        ):
+            raise DesktopServiceError(incompatible)
+        try:
+            script = self._request("GET", "/assets/zhihu-companion.user.js", timeout=3)
+        except DesktopServiceError:
+            raise DesktopServiceError(incompatible) from None
+        # A route alone does not guarantee that a frozen build contains its web asset.
+        header, marker, body = script.text.partition("// ==/UserScript==")
+        if (
+            not header.startswith("// ==UserScript==")
+            or not re.search(r"^//\s*@namespace\s+zhijing\.local/zhihu-companion\s*$", header, re.M)
+            or not marker
+            or not body.strip()
+        ):
+            raise DesktopServiceError(incompatible)
 
     def _port_is_occupied(self) -> bool:
         try:
@@ -150,6 +219,11 @@ class DesktopService:
                         "该端口已被占用或服务尚未就绪，请稍后重试或选择其他端口；原服务未被修改。"
                     ) from None
             else:
+                if health.get("api_auth") != "session-v1":
+                    raise DesktopServiceError(
+                        "当前端口的知境服务尚未启用新版 API 鉴权。"
+                        "请退出旧版知境及其本地服务，再重新启动当前程序；原服务和资料未被修改。"
+                    )
                 self._verify_existing_service()
                 return health
             if self._thread is not None and self._thread.is_alive():
@@ -243,17 +317,11 @@ class DesktopService:
             raise DesktopServiceError("请先选择一份有效资料。")
         if not isinstance(question, str) or not 1 <= len(question.strip()) <= 2000:
             raise DesktopServiceError("请输入 1 到 2000 个字符的问题。")
-        page = self._request("GET", "/workspace", timeout=10)
-        tokens = _PageTokens(page.text).tokens
-        if len(tokens) != 1:
-            raise DesktopServiceError("无法读取本地页面会话，请检查服务版本后重试。")
-        token = next(iter(tokens))
         payload = self._json(
             self._request(
                 "POST",
                 "/api/v1/author/ask",
                 timeout=300,
-                headers={"X-Zhijing-Token": token, "Origin": self.base_url},
                 json={
                     "author_id": source["author_id"],
                     "primary_source_id": source["id"],
@@ -272,6 +340,7 @@ class DesktopService:
 
     def shutdown(self) -> None:
         with self._lock:
+            self._config_token = None
             # Reusing an existing endpoint never creates these owned-server references.
             server, thread = self._server, self._thread
             if server is None or thread is None:

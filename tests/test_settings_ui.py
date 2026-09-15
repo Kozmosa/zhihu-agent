@@ -79,7 +79,7 @@ def config(provider="openai"):
         "provider": provider,
         "base_url": "https://model.test/proxy/v1"
         if provider == "openai"
-        else "http://model.test/proxy/api",
+        else "https://model.test/proxy/api",
         "model": "fixture",
         "api_key": "synthetic-secret-do-not-echo",
         "output_format": "json",
@@ -160,7 +160,11 @@ def test_cross_origin_bad_host_and_token_rejected(setup_api):
 
 
 def test_remote_configuration_rejected(tmp_path):
-    with TestClient(create_app(Settings(data_dir=tmp_path)), client=("192.0.2.3", 12345)) as client:
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("192.0.2.3", 12345),
+    ) as client:
         assert client.get("/").status_code == 403
         assert client.get("/api/v1/settings/model").status_code == 403
 
@@ -203,6 +207,52 @@ def test_prompt_format_omits_response_format_and_empty_key_clears_auth(setup_api
     assert "response_format" not in json.loads(state["calls"][-1].content)
     assert "authorization" not in state["calls"][-1].headers
     assert client.get("/api/v1/settings/model").json()["has_api_key"] is False
+
+
+def test_persistence_is_explicit_and_test_never_saves(setup_api, monkeypatch):
+    import zhijing.settings_ui as settings_module
+
+    client, _ = setup_api
+    saved = []
+    monkeypatch.setattr(
+        settings_module, "save_model_profile", lambda path, profile: saved.append(profile)
+    )
+    assert (
+        client.post("/api/v1/settings/model/test", json={**config(), "persist": True}).status_code
+        == 200
+    )
+    assert saved == []
+    assert client.post("/api/v1/settings/model/apply", json=config()).status_code == 200
+    assert saved == []
+    response = client.post("/api/v1/settings/model/apply", json={**config(), "persist": True})
+    assert response.status_code == 200, response.text
+    assert response.json()["persistence"] == "encrypted_local"
+    assert len(saved) == 1
+    assert saved[0]["ZHIJING_OPENAI_API_KEY"] == config()["api_key"]
+    status = client.get("/api/v1/settings/model")
+    assert status.json()["persistence"] == "encrypted_local"
+    assert config()["api_key"] not in response.text + status.text
+
+
+def test_persistence_failure_preserves_active_configuration(setup_api, monkeypatch):
+    import zhijing.settings_ui as settings_module
+    from zhijing.core.credentials import CredentialStorageError
+
+    client, _ = setup_api
+    assert client.post("/api/v1/settings/model/apply", json=config()).status_code == 200
+    original = client.app.state.runtime.current.container
+
+    def fail(*args):
+        raise CredentialStorageError("本机加密配置不可写入。")
+
+    monkeypatch.setattr(settings_module, "save_model_profile", fail)
+    response = client.post(
+        "/api/v1/settings/model/apply", json={**config(), "persist": True, "model": "new"}
+    )
+    assert response.status_code == 422
+    assert client.app.state.runtime.current.container is original
+    assert not original.model_client.is_closed
+    assert client.get("/api/v1/settings/model").json()["model"] == "fixture"
 
 
 @pytest.mark.parametrize("task", ["reading", "cards", "facts", "knowledge", "author"])
@@ -256,11 +306,13 @@ def test_product_pages_share_one_chat_widget_and_session_nonce(setup_api, path):
         == 1
     )
     token = client.app.state.config_token
-    assert scripts and all(attrs.get("nonce") == token for attrs in scripts)
+    nonce = re.search(r"nonce-([^']+)", response.headers["content-security-policy"])[1]
+    assert nonce != token
+    assert scripts and all(attrs.get("nonce") == nonce for attrs in scripts)
     widget_script = next(attrs for attrs in scripts if attrs.get("src") == "/assets/chat-widget.js")
     assert widget_script.get("data-config-token") == token
     policy = response.headers["content-security-policy"]
-    assert "script-src 'nonce-" + token + "'" in policy
+    assert "script-src 'nonce-" + nonce + "'" in policy
     assert "connect-src 'self'" in policy and "frame-ancestors 'none'" in policy
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["referrer-policy"] == "no-referrer"
@@ -294,7 +346,11 @@ def test_shared_chat_pages_and_assets_reject_untrusted_origin(setup_api, path):
 
 
 def test_shared_chat_assets_and_workspace_reject_nonlocal_clients(tmp_path):
-    with TestClient(create_app(Settings(data_dir=tmp_path)), client=("192.0.2.3", 12345)) as client:
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("192.0.2.3", 12345),
+    ) as client:
         for path in ["/", "/workspace", "/assets/chat-widget.js", "/assets/chat-widget.css"]:
             response = client.get(path)
             assert response.status_code == 403

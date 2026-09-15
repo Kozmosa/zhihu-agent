@@ -2,11 +2,12 @@
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from threading import RLock
+from threading import Lock, RLock
 
 from zhijing.container import Container, build_container
 from zhijing.core.config import Settings
 from zhijing.core.errors import DomainError
+from zhijing.features.zhihu.companion import CompanionInbox
 
 
 @dataclass
@@ -19,9 +20,14 @@ class Slot:
 class Runtime:
     def __init__(self, settings: Settings):
         self.lock = RLock()
+        # Website login is independent of model and official search configuration.
+        # It belongs only to this service session and is never written to Settings.
+        self.zhihu_web_cookie = ""
+        self.zhihu_web_lock = Lock()
         self.settings = settings
         self.revision = 0
         self.current = Slot(build_container(settings))
+        self.companion_inbox = CompanionInbox(settings.data_dir)
         try:
             self.current.container.runs.recover_interrupted()
         except Exception:
@@ -59,6 +65,8 @@ class Runtime:
 
     def close(self):
         with self.lock:
+            self.companion_inbox.close()
+            self.zhihu_web_cookie = ""
             self.current.retired = True
             if not self.current.users:
                 self.current.container.close()

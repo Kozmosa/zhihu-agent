@@ -1,4 +1,7 @@
-"""Opt-in API token: gates remote /api/v1 clients while local use stays unchanged."""
+"""Opt-in API token: gates remote /api/v1 clients while local use stays unchanged.
+
+未配置令牌时业务接口维持仅本机；配置后公网客户端改用 Bearer 鉴权。
+"""
 
 from fastapi.testclient import TestClient
 
@@ -35,12 +38,18 @@ def test_local_clients_settings_and_health_stay_open(tmp_path):
         create_app(Settings(data_dir=tmp_path, api_token=TOKEN)), client=("127.0.0.1", 12345)
     ) as local:
         assert local.get("/api/v1/runs").status_code == 200
-        assert local.get("/api/v1/settings/model").status_code == 200
+        # 设置接口除本机外还要页面会话令牌，与是否配置 API 令牌无关。
+        assert local.get("/api/v1/settings/model").status_code == 403
+        session = {"X-Zhijing-Token": local.app.state.config_token}
+        assert local.get("/api/v1/settings/model", headers=session).status_code == 200
 
 
-def test_remote_access_stays_open_without_token(tmp_path):
+def test_remote_business_api_stays_local_without_token(tmp_path):
+    # 没有显式配置令牌时不开公网入口；这是默认姿态，放行必须先做配置决定。
     with remote_client(tmp_path) as client:
-        assert client.get("/api/v1/runs").status_code == 200
+        rejected = client.get("/api/v1/runs")
+        assert rejected.status_code == 403
+        assert rejected.json()["error"]["code"] == "local_only"
 
 
 def test_token_environment_is_validated_and_kept_private(monkeypatch, tmp_path):

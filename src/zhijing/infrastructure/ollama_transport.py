@@ -1,9 +1,11 @@
 """Ollama HTTP boundary: no silent fallback, retry, or provider error disclosure."""
 
 import httpx
-from .transcript_context import get_context
 
 from zhijing.core.errors import DomainError
+from zhijing.core.redaction import client_redactor
+
+from .transcript_context import get_context
 
 
 def system_prompt(instructions: str) -> str:
@@ -16,12 +18,19 @@ def system_prompt(instructions: str) -> str:
 
 class OllamaTransport:
     def __init__(
-        self, client: httpx.Client, model: str, num_predict: int = 4096, num_ctx: int = 32768
+        self,
+        client: httpx.Client,
+        model: str,
+        num_predict: int = 4096,
+        num_ctx: int = 32768,
+        secret_values=(),
     ):
         self.client, self.model, self.num_predict = client, model, num_predict
         self.num_ctx = num_ctx
+        self.redactor = client_redactor(client, secret_values)
 
     def request(self, *, prompt: str, instructions: str, output_format: dict | str | None) -> str:
+        prompt, instructions = self.redactor.text(prompt), self.redactor.text(instructions)
         body = {
             "model": self.model,
             "stream": False,
@@ -35,32 +44,60 @@ class OllamaTransport:
         endpoint = "generate" if base_path.endswith("/api") else "api/generate"
         ctx = get_context()
         if ctx:
-            ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="request", provider="ollama", model=self.model, payload={"prompt": prompt, "instructions": instructions})
+            ctx.transcript.append(
+                session_id=ctx.session_id,
+                run_id=ctx.run_id,
+                step_id=ctx.step_id,
+                attempt=ctx.attempt,
+                event="request",
+                provider="ollama",
+                model=self.redactor.text(self.model),
+                payload={"prompt": prompt, "instructions": instructions},
+            )
         try:
-            response = self.client.post(endpoint, json=body)
+            response = self.client.post(endpoint, json=body, follow_redirects=False)
             response.raise_for_status()
-            if ctx:
-                ctx.transcript.append(session_id=ctx.session_id, run_id=ctx.run_id, step_id=ctx.step_id, attempt=ctx.attempt, event="response", provider="ollama", model=self.model, payload={"response": response.text})
-        except httpx.TimeoutException as exc:
+        except httpx.TimeoutException:
             raise DomainError(
                 "model_timeout", "模型调用超时，请检查模型服务或调整超时配置。", 502
-            ) from exc
-        except httpx.HTTPError as exc:
+            ) from None
+        except httpx.HTTPError:
             raise DomainError(
                 "model_unavailable", "模型服务不可用，请检查地址、模型名称及鉴权配置。", 502
-            ) from exc
+            ) from None
         try:
             envelope = response.json()
-            text = envelope["response"]
-            if not isinstance(text, str) or not text.strip() or len(text) > 256_000:
-                raise ValueError("Invalid response text")
-            if envelope.get("done") is False or envelope.get("done_reason") in {
+            if self.redactor.contains(response.text):
+                raise ValueError("Credential in model response")
+            if isinstance(envelope, dict) and envelope.get("done_reason") in {
                 "length",
                 "max_tokens",
             }:
+                raise DomainError(
+                    "model_output_truncated",
+                    "模型达到输出上限，未完成生成。请减少生成数量，或在模型设置中提高最大输出 Token。",
+                    502,
+                )
+            text = envelope["response"]
+            if self.redactor.contains(str(text)):
+                raise ValueError("Credential in model response")
+            if not isinstance(text, str) or not text.strip() or len(text) > 256_000:
+                raise ValueError("Invalid response text")
+            if envelope.get("done") is False:
                 raise ValueError("Incomplete generation")
-        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        except (ValueError, KeyError, TypeError, AttributeError):
             raise DomainError(
                 "model_invalid_response", "模型响应缺失、超限或生成未完成。", 502
-            ) from exc
+            ) from None
+        if ctx:
+            ctx.transcript.append(
+                session_id=ctx.session_id,
+                run_id=ctx.run_id,
+                step_id=ctx.step_id,
+                attempt=ctx.attempt,
+                event="response",
+                provider="ollama",
+                model=self.redactor.text(self.model),
+                payload={"response": text},
+            )
         return text

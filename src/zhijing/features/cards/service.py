@@ -60,6 +60,7 @@ class CardService:
             response_model=GeneratedCards,
         )
         generated_batches = []
+        rejected = 0
         for batch in batches:
             payload = payload_for(batch)
             result = self.generator.generate(
@@ -68,19 +69,26 @@ class CardService:
                 payload=payload,
                 response_model=GeneratedCards,
             )
-            if len(result.cards) > count:
-                raise DomainError("model_invalid_response", "模型生成的卡片数量超过请求上限。", 502)
+            rejected += result.rejected_count
+            candidates = []
             questions = set()
             for card in result.cards:
                 question = " ".join(card.front.casefold().split())
                 if question in questions:
-                    raise DomainError("model_invalid_response", "模型生成了重复的卡片问题。", 502)
-                questions.add(question)
+                    rejected += 1
+                    continue
                 if card.evidence_excerpt not in payload["text"]:
-                    raise DomainError(
-                        "model_invalid_response", "卡片证据摘录无法在本批资料原文中找到。", 502
-                    )
-            generated_batches.append(result.cards)
+                    rejected += 1
+                    continue
+                questions.add(question)
+                candidates.append(card)
+            if result.cards and not candidates:
+                raise DomainError(
+                    "cards_evidence_invalid",
+                    "卡片证据均无法在本批原文中找到，请重试或换用其他模型。",
+                    502,
+                )
+            generated_batches.append(candidates[:count])
         # Interleave candidates so later portions participate in a global limit.
         # Repeated questions between independent batches are expected and merged.
         cards, questions = [], set()
@@ -98,6 +106,10 @@ class CardService:
             if len(cards) == count:
                 break
         notice = "问题与答案由模型生成；证据摘录已核对为原文片段，但答案含义仍需人工核查。"
+        if rejected:
+            notice += f"已跳过 {rejected} 张格式不符、重复或证据不匹配的候选卡片。"
+        if not cards:
+            notice += "本次未提取到可用卡片，可换用内容更完整的资料后重试。"
         if len(batches) > 1:
             notice += (
                 f"已按输入预算分 {len(batches)} 批处理全部原文；"

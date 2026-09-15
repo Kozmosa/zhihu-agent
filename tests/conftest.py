@@ -6,11 +6,17 @@ from fastapi.testclient import TestClient
 
 from zhijing.app import create_app
 from zhijing.core.config import Settings
+from zhijing.local_auth import connect_local_client
 
 
 @pytest.fixture
 def client(tmp_path):
-    with TestClient(create_app(Settings(data_dir=tmp_path))) as test_client:
+    with TestClient(
+        create_app(Settings(data_dir=tmp_path)),
+        base_url="http://127.0.0.1",
+        client=("127.0.0.1", 12345),
+    ) as test_client:
+        connect_local_client(test_client)
         yield test_client
 
 
